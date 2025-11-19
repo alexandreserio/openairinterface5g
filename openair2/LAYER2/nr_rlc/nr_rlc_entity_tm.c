@@ -139,7 +139,7 @@ void nr_rlc_entity_tm_recv_sdu(nr_rlc_entity_t *_entity,
   /* log SDUs rejected, at most once per second */
   if (entity->sdu_rejected != 0
       && entity->t_current > entity->t_log_buffer_full + 1000) {
-    LOG_E(RLC, "%d SDU rejected, SDU buffer full\n", entity->sdu_rejected);
+    LOG_E(RLC, "(TM_RECV_SDU) %d SDU rejected, SDU buffer full\n", entity->sdu_rejected); //[ALEX] Added id
     entity->sdu_rejected = 0;
     entity->t_log_buffer_full = entity->t_current;
   }

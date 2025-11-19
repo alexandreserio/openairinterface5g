@@ -32,13 +32,13 @@
 #include "tun_if.h"
 #include "system.h"
 
-static void reblock_tun_socket(int fd)
+static void reblock_tun_socket(int fd) //reblocks the tun socket
 {
   int f;
 
-  f = fcntl(fd, F_GETFL, 0);
-  f &= ~(O_NONBLOCK);
-  if (fcntl(fd, F_SETFL, f) == -1) {
+  f = fcntl(fd, F_GETFL, 0); //perform operation F_GETFL on file descriptor fd. Arg 0 is ignored --> returns file access mode and the file status flags
+  f &= ~(O_NONBLOCK); //~04000 -> ~0000.0100.0000.0000 -> 1111.1011.1111.1111 -> FBFF -> f & FBFF -> clears O_NONBLOCK bit
+  if (fcntl(fd, F_SETFL, f) == -1) { //if set the file status flags to f fails
     LOG_E(PDCP, "fcntl(F_SETFL) failed on fd %d: errno %d, %s\n", fd, errno, strerror(errno));
   }
 }
