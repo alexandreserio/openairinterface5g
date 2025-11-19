@@ -609,7 +609,7 @@ void *trx_usrp_write_thread(void * arg)
     s->tx_md.start_of_burst = (s->tx_count==0) ? true : first_packet;
     s->tx_md.end_of_burst   = last_packet;
     s->tx_md.time_spec      = uhd::time_spec_t::from_ticks(timestamp, s->sample_rate);
-    LOG_D(PHY,"usrp_tx_write: tx_count %llu SoB %d, EoB %d, TS %llu\n",(unsigned long long)s->tx_count,s->tx_md.start_of_burst,s->tx_md.end_of_burst,(unsigned long long)timestamp); 
+    LOG_W(PHY,"usrp_tx_write: tx_count %llu SoB %d, EoB %d, TS %llu\n",(unsigned long long)s->tx_count,s->tx_md.start_of_burst,s->tx_md.end_of_burst,(unsigned long long)timestamp); //[ALEX] changed from D to W
     s->tx_count++;
 
     // bit 3 enables gpio (for backward compatibility)
@@ -1352,6 +1352,12 @@ extern "C" {
       uhd::tune_request_t rx_tune_req(cfg->rx_freq[i], cfg->tune_offset);
       s->usrp->set_rx_freq(rx_tune_req, i+choffset);
       set_rx_gain_offset(cfg, i, bw_gain_adjust);
+
+      //Reset any rx_gain_offset [ADDED ALEX] //TESTED AND OK
+      for (int chain_index = 0; chain_index < 4; chain_index++){
+      	cfg->rx_gain_offset[chain_index] = 0.0;
+      }
+
       ::uhd::gain_range_t gain_range = s->usrp->get_rx_gain_range(i+choffset);
       // limit to maximum gain
       double gain = cfg->rx_gain[i] - cfg->rx_gain_offset[i];
@@ -1381,7 +1387,7 @@ extern "C" {
       uhd::tune_request_t tx_tune_req(openair0_cfg[0].tx_freq[i],
                                       openair0_cfg[0].tune_offset);
       s->usrp->set_tx_freq(tx_tune_req, i+choffset);
-      s->usrp->set_tx_gain(gain_range_tx.stop()-openair0_cfg[0].tx_gain[i],i+choffset);
+      s->usrp->set_tx_gain(openair0_cfg[0].tx_gain[i],i+choffset); // [GONÇALO]
       LOG_I(HW,"USRP TX_GAIN:%3.2lf gain_range:%3.2lf tx_gain:%3.2lf\n", gain_range_tx.stop()-openair0_cfg[0].tx_gain[i], gain_range_tx.stop(), openair0_cfg[0].tx_gain[i]);
     }
   }
@@ -1513,7 +1519,7 @@ extern "C" {
   }
 
   std::cout << boost::format("Using Device: %s") % s->usrp->get_pp_string() << std::endl;
-  LOG_I(HW,"Device timestamp: %f...\n", s->usrp->get_time_now().get_real_secs());
+  LOG_W(HW,"Device timestamp: %f...\n", s->usrp->get_time_now().get_real_secs()); //[ALEX] Changed from I to W
   device->trx_write_func = trx_usrp_write;
   device->trx_read_func  = trx_usrp_read;
   s->sample_rate = openair0_cfg[0].sample_rate;

@@ -85,6 +85,8 @@ check_supported_distribution() {
     case "$distribution" in
         "ubuntu24.04") return 0 ;;
         "ubuntu22.04") return 0 ;;
+        "ubuntu20.04") return 0 ;;
+	"debian13")    return 0 ;;
         "debian11")    return 0 ;;
         "debian12")    return 0 ;;
         "fedora43")    return 0 ;;
@@ -442,7 +444,7 @@ check_install_oai_software() {
     fi
     $SUDO $INSTALLER update -y
   if [[ "$OS_BASEDISTRO" == "debian" ]]; then
-    $SUDO apt install -y software-properties-common
+    #$SUDO apt install -y software-properties-common
     case "$(get_distribution_release)" in
          "debian11" | "debian12" )
             specific_packages="libz-dev"
@@ -453,7 +455,7 @@ check_install_oai_software() {
 	automake  \
 	build-essential \
 	$CMAKE \
-        ninja-build \
+    ninja-build \
 	pkg-config \
 	git \
 	libreadline-dev \

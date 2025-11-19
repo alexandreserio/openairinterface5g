@@ -547,7 +547,7 @@ nr_sdap_entity_t *nr_sdap_get_entity(ue_id_t ue_id, int pdusession_id)
 
   while ((sdap_entity->ue_id != ue_id || sdap_entity->pdusession_id != pdusession_id) && sdap_entity->next_entity != NULL) {
     sdap_entity = sdap_entity->next_entity;
-  }
+  } //runs over the linked list of SDAP entities until it finds the one matching the ue_id and pdusession_id
 
   if (sdap_entity->ue_id == ue_id && sdap_entity->pdusession_id == pdusession_id)
     return sdap_entity;
