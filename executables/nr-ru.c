@@ -858,10 +858,10 @@ static void fill_rf_config(RU_t *ru, char *rf_config_file)
     }
 
     // cfg->tx_gain[i] = ru->att_tx; [ALEX]
-    if(strstr(cfg->sdr_addrs. "x300") != NULL){
+    if(strstr(cfg->sdr_addrs, "x300") != NULL){
       cfg->tx_gain[i] = 31.5 - (double)ru->att_tx;
-    } else if(strstr(cfg->sdr_addrs. "b200") != NULL){
-      cfg->tx_gain[i] = 39.75 - (double)ru->att_tx;
+    } else if(strstr(cfg->sdr_addrs, "b200") != NULL){
+      cfg->tx_gain[i] = 89.75 - (double)ru->att_tx;
     } else {
       cfg->tx_gain[i] = 89.75 - (double)ru->att_tx;
     }
