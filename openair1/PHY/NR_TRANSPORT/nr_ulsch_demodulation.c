@@ -227,10 +227,10 @@ static void nr_ulsch_channel_compensation(uint32_t buffer_length,
         simde__m256i comp = oai_mm256_cpx_mult_conj(chF_256[i], rxF_256[i], output_shift);
         rxComp_256[i] = simde_mm256_add_epi16(rxComp_256[i], comp); 
         static FILE *iq_file = NULL;
-        static int16_t reservoir[10000]; 
+        static int16_t reservoir[16000]; 
         static int sample_count = 0;
         static int frame_sample_count = 0;
-        static const int K = 5000; // samples to keep
+        static const int K = 8000; // samples to keep
         static int current_frame = -1;
         static unsigned int rng_state = 123456789; // LCG seed
         static int first_run = 1;
