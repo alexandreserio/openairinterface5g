@@ -1127,7 +1127,7 @@ f1ap_gnb_du_system_info_t *get_sys_info(NR_BCCH_BCH_Message_t *mib, const NR_BCC
 
   sys_info->mib = calloc_or_fail(buf_len, sizeof(*sys_info->mib));
   DevAssert(mib != NULL);
-  sys_info->mib_length = encode_MIB_NR(mib, 0, sys_info->mib, buf_len);
+  sys_info->mib_length = encode_MIB_NR_setup(mib->message.choice.mib, 0, sys_info->mib, buf_len);
   DevAssert(sys_info->mib_length == buf_len);
 
   DevAssert(sib1 != NULL);
@@ -1356,7 +1356,19 @@ static void config_pdcp(configmodule_interface_t *cfg, nr_pdcp_configuration_t *
   pdcp_config->drb.discard_timer = config_get_processedint(cfg, &pdcp_params[CONFIG_NR_PDCP_DRB_DISCARD_TIMER_IDX]);
 }
 
-static void get_bwp_config(nr_mac_config_t *configuration)
+void nfapi_stop_l1()
+{
+  if (NFAPI_MODE && (NFAPI_MODE == NFAPI_MODE_AERIAL || NFAPI_MODE == NFAPI_MODE_VNF)) {
+    stop_nr_nfapi_vnf();
+  } else if (NFAPI_MODE && NFAPI_MODE == NFAPI_MODE_PNF) {
+    // PNF should just wait for the STOP.request to come from the L2
+    // If instead it was stopped first, in some cases it makes sense for it to terminate itself (WLS)
+    // Sends a STOP.indication to the VNF
+    stop_nr_nfapi_pnf();
+  }
+}
+
+static void get_bwp_config(nr_mac_config_t *configuration, const NR_ServingCellConfigCommon_t *scc)
 {
   char path[MAX_OPTNAME_SIZE * 2 + 8];
   snprintf(path, sizeof(path), "%s.[%i]", GNB_CONFIG_STRING_GNB_LIST, 0);
@@ -1365,10 +1377,13 @@ static void get_bwp_config(nr_mac_config_t *configuration)
   AssertFatal(configuration->num_additional_bwps >= 0 && configuration->num_additional_bwps <= 4,
               "Invalid number of additional BWPs %d\n",
               configuration->num_additional_bwps);
+  int bw = scc->downlinkConfigCommon->frequencyInfoDL->scs_SpecificCarrierList.list.array[0]->carrierBandwidth;
   for (int i = 0; i < configuration->num_additional_bwps; i++) {
     configuration->bwp_config[i].id = i + 1;
     int bwp_start = *BWPParamList.paramarray[i][GNB_BWP_START_IDX].iptr;
+    AssertFatal(bwp_start >= 0 && bwp_start < bw, "Invalid BWP start value %d\n", bwp_start);
     int bwp_size = *BWPParamList.paramarray[i][GNB_BWP_SIZE_IDX].iptr;
+    AssertFatal(bwp_start + bwp_size <= bw, "BWP start %d and BWP size %d exceeds full BW %d\n", bwp_start, bwp_size, bw);
     configuration->bwp_config[i].location_and_bw = PRBalloc_to_locationandbandwidth(bwp_size, bwp_start);
     configuration->bwp_config[i].scs = *BWPParamList.paramarray[i][GNB_BWP_SCS_IDX].iptr;
     LOG_I(GNB_APP,
@@ -1405,12 +1420,6 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
         config.pdsch_AntennaPorts.N2,
         config.pdsch_AntennaPorts.XP,
         config.pusch_AntennaPorts);
-
-  // BWP
-  get_bwp_config(&config);
-  AssertFatal(config.num_additional_bwps <= 4, "Impossible to configure more than 4 additional BWPs\n");
-  config.first_active_bwp = *GNBParamList.paramarray[0][GNB_1ST_ACTIVE_BWP_IDX].iptr;
-  AssertFatal(config.first_active_bwp <= config.num_additional_bwps, "1st active BWP does not belog to the configured BWPs\n");
 
   // RU
   GET_PARAMS_LIST(RUParamList, RUParams, RUPARAMS_DESC, CONFIG_STRING_RU_LIST, NULL);
@@ -1512,7 +1521,11 @@ void RCconfig_nr_macrlc(configmodule_interface_t *cfg)
         config.num_agg_level_candidates[PDCCH_AGG_LEVEL16]);
 
   NR_ServingCellConfigCommon_t *scc = get_scc_config(cfg, config.minRXTXTIME, config.do_SRS);
-  //xer_fprint(stdout, &asn_DEF_NR_ServingCellConfigCommon, scc);
+  // BWP
+  get_bwp_config(&config, scc);
+  AssertFatal(config.num_additional_bwps <= 4, "Impossible to configure more than 4 additional BWPs\n");
+  config.first_active_bwp = *GNBParamList.paramarray[0][GNB_1ST_ACTIVE_BWP_IDX].iptr;
+  AssertFatal(config.first_active_bwp <= config.num_additional_bwps, "1st active BWP does not belog to the configured BWPs\n");
 
   if (MacRLC_ParamList.numelt > 0) {
     /* NR RLC config is needed by mac_top_init_gNB() */

@@ -398,7 +398,8 @@ bwp_info_t get_pdsch_bwp_start_size(gNB_MAC_INST *nr_mac, NR_UE_info_t *UE)
   // except for the case when DCI format 1_0 is decoded in any common search space in which case the size of CORESET 0 shall be
   // used if CORESET 0 is configured for the cell and the size of initial DL bandwidth part shall be used if CORESET 0 is not
   // configured for the cell.
-  if (dl_bwp->dci_format == NR_DL_DCI_FORMAT_1_0 && sched_ctrl->search_space->searchSpaceType
+  if (dl_bwp->dci_format == NR_DL_DCI_FORMAT_1_0
+      && sched_ctrl->search_space->searchSpaceType
       && sched_ctrl->search_space->searchSpaceType->present == NR_SearchSpace__searchSpaceType_PR_common) {
     if (sched_ctrl->coreset->controlResourceSetId == 0) {
       bwp_info.bwpStart = nr_mac->cset0_bwp_start;
@@ -406,9 +407,9 @@ bwp_info_t get_pdsch_bwp_start_size(gNB_MAC_INST *nr_mac, NR_UE_info_t *UE)
       bwp_info.bwpStart = dl_bwp->BWPStart + sched_ctrl->sched_pdcch.rb_start;
     }
     if (nr_mac->cset0_bwp_size > 0) {
-      bwp_info.bwpSize = min(dl_bwp->BWPSize - bwp_info.bwpStart, nr_mac->cset0_bwp_size);
+      bwp_info.bwpSize = min(dl_bwp->BWPSize, nr_mac->cset0_bwp_size);
     } else {
-      bwp_info.bwpSize = min(dl_bwp->BWPSize - bwp_info.bwpStart, UE->sc_info.initial_dl_BWPSize);
+      bwp_info.bwpSize = min(dl_bwp->BWPSize, UE->sc_info.initial_dl_BWPSize);
     }
   } else {
     bwp_info.bwpSize = dl_bwp->BWPSize;
@@ -590,6 +591,21 @@ static bool allocate_dl_retransmission(gNB_MAC_INST *nr_mac,
     rballoc_mask[rb] |= SL_to_bitmap(new_sched.tda_info.startSymbolIndex, new_sched.tda_info.nrOfSymbols);
 
   return true;
+}
+
+static void ack_reconfig(gNB_MAC_INST *mac, NR_UE_info_t *UE)
+{
+  if (UE->reconfigSpCellConfig) {
+    // in case of reestablishment, the spCellConfig had to be released
+    // temporarily. Reapply now before doing the reconfiguration.
+    UE->CellGroup->spCellConfig = UE->reconfigSpCellConfig;
+    // UE->reconfigSpCellConfig to be NULLed after receiving reconfiguration complete
+  }
+  NR_ServingCellConfigCommon_t *scc = mac->common_channels[0].ServingCellConfigCommon;
+  /* clean BWP structures */
+  clean_bwp_structures(UE->CellGroup->spCellConfig);
+  configure_UE_BWP(mac, scc, UE, false, NR_SearchSpace__searchSpaceType_PR_common, -1, -1);
+  UE->await_reconfig = false;
 }
 
 typedef struct UEsched_s {
@@ -866,6 +882,12 @@ static void pf_dl(gNB_MAC_INST *mac,
       .tda_info = tda_info,
     };
 
+    sched_pdsch.action = NULL;
+    int srb1 = 1;
+    /* everything that's only 3 bytes is an ack. To be safe, use a bit more. */
+    if (iterator->UE->await_reconfig && sched_ctrl->rlc_status[srb1].bytes_in_buffer > 10)
+      sched_pdsch.action = ack_reconfig;
+
     // Fix me: currently, the RLC does not give us the total number of PDUs
     // awaiting. Therefore, for the time being, we put a fixed overhead of 12
     // (for 4 PDUs) and optionally + 2 for TA. Once RLC gives the number of
@@ -1113,7 +1135,12 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE
   // TODO: verify the case where maxMIMO_Layers is NULL, in which case
   //       in principle maxMIMO_layers should be given by the maximum number of layers
   //       for PDSCH supported by the UE for the serving cell (5.4.2.1 of 38.212)
-  long maxMIMO_Layers = UE->sc_info.maxMIMO_Layers_PDSCH ? *UE->sc_info.maxMIMO_Layers_PDSCH : 1;
+  long ue_supp_nl = ue_supported_dl_layers(scc, UE->capability);
+  long maxMIMO_Layers = UE->sc_info.maxMIMO_Layers_PDSCH ? *UE->sc_info.maxMIMO_Layers_PDSCH : ue_supp_nl;
+  if (maxMIMO_Layers < 1) {
+    LOG_D(NR_MAC, "Both maxMIMO_Layers_PDSCH and UE supported layers are not present, defaulting to 1\n");
+    maxMIMO_Layers = 1;
+  }
   const int nl_tbslbrm = min(maxMIMO_Layers, 4);
   nfapi_nr_dl_tti_pdsch_pdu_rel15_t *pdsch_pdu = prepare_pdsch_pdu(dl_tti_pdsch_pdu,
                                                                    nr_mac,
@@ -1186,7 +1213,6 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pdsch, NR_UE
                      &dci_payload,
                      current_BWP->dci_format,
                      rnti_type,
-                     bwp_id,
                      sched_ctrl->search_space,
                      sched_ctrl->coreset,
                      UE->pdsch_HARQ_ACK_Codebook,
@@ -1395,5 +1421,4 @@ void nr_schedule_ue_spec(module_id_t module_id,
 
   /* PREPROCESSOR */
   gNB_mac->pre_processor_dl(gNB_mac, &pdsch);
-
 }
