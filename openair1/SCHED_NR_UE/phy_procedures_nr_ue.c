@@ -37,7 +37,6 @@
 #include "defs.h"
 #include "PHY/defs_nr_UE.h"
 #include "PHY/NR_REFSIG/dmrs_nr.h"
-#include "PHY/phy_extern_nr_ue.h"
 #include "PHY/MODULATION/modulation_UE.h"
 #include "PHY/INIT/nr_phy_init.h"
 #include "PHY/nr_phy_common/inc/nr_phy_common.h"
@@ -95,6 +94,7 @@ void nr_fill_dl_indication(nr_downlink_indication_t *dl_ind,
   dl_ind->gNB_index = proc->gNB_id;
   dl_ind->module_id = ue->Mod_id;
   dl_ind->cc_id     = ue->CC_id;
+  dl_ind->hfn       = proc->hfn_rx;
   dl_ind->frame     = proc->frame_rx;
   dl_ind->slot      = proc->nr_slot_rx;
   dl_ind->phy_data  = phy_data;

@@ -104,7 +104,7 @@ static int16_t ssb_index_from_prach(module_id_t module_idP,
   int config_period = cc->prach_info.x;
   //  prach_occasion_id = subframe_index * N_t_slot * N_RA_slot * fdm + N_RA_slot_index * N_t_slot * fdm + freq_index + fdm * start_symbol_index;
   prach_occasion_id =
-      (((frameP % (cc->max_association_period * config_period)) / config_period) * cc->total_prach_occasions_per_config_period)
+      (((frameP % (cc->association_period * config_period)) / config_period) * cc->total_prach_occasions_per_config_period)
       + (RA_sfn_index + slot_index) * cc->prach_info.N_t_slot * fdm + start_symbol_index * fdm + freq_index;
 
   //one SSB have more than one continuous RO
@@ -178,7 +178,7 @@ void find_SSB_and_RO_available(gNB_MAC_INST *nrmac)
   float num_ssb_per_RO = ssb_per_rach_occasion[cfg->prach_config.ssb_per_rach.value];	
   uint8_t fdm = cfg->prach_config.num_prach_fd_occasions.value;
   uint64_t L_ssb = (((uint64_t) cfg->ssb_table.ssb_mask_list[0].ssb_mask.value) << 32) | cfg->ssb_table.ssb_mask_list[1].ssb_mask.value;
-  uint32_t total_RA_occasions = prach_info.N_RA_sfn * prach_info.N_t_slot * prach_info.N_RA_slot * fdm;
+  cc->total_prach_occasions_per_config_period = prach_info.N_RA_sfn * prach_info.N_t_slot * prach_info.N_RA_slot * fdm;
 
   for(int i = 0; i < 64; i++) {
     if ((L_ssb >> (63 - i)) & 0x01) { // only if the bit of L_ssb at current ssb index is 1
@@ -187,15 +187,22 @@ void find_SSB_and_RO_available(gNB_MAC_INST *nrmac)
     }
   }
 
-  cc->total_prach_occasions_per_config_period = total_RA_occasions;
+  // An association period, starting from frame 0, for mapping SS/PBCH block indexes to PRACH occasions is the smallest
+  // value in the set determined by the PRACH configuration period according Table 8.1-1 of 38.213
+  // such that all tx SSB indexes are mapped at least once to the PRACH occasions within the association period
+  // An association pattern period includes one or more association periods and is determined
+  // so that a pattern between PRACH occasions and SS/PBCH block indexes repeats at most every 160 msec
+  int total_RA_occasions = 0;
   for (int i = 1; (1 << (i - 1)) <= prach_info.max_association_period; i++) {
-    cc->max_association_period = (1 << (i - 1));
-    total_RA_occasions = total_RA_occasions * cc->max_association_period;
-    if(total_RA_occasions >= (int) (num_active_ssb / num_ssb_per_RO)) {
+    cc->association_period = (1 << (i - 1));
+    int temp_RA_occasions = cc->total_prach_occasions_per_config_period * cc->association_period;
+    if(temp_RA_occasions >= (int) (num_active_ssb / num_ssb_per_RO)) {
+      total_RA_occasions = temp_RA_occasions;
       repetition = (uint16_t)((total_RA_occasions * num_ssb_per_RO) / num_active_ssb);
       break;
     }
   }
+  AssertFatal(total_RA_occasions > 0, "Couldn't find a valid association period for PRACH occasions\n");
 
   unused_RA_occasion = total_RA_occasions - (int)((num_active_ssb * repetition) / num_ssb_per_RO);
   cc->total_prach_occasions = total_RA_occasions - unused_RA_occasion;
@@ -208,7 +215,7 @@ void find_SSB_and_RO_available(gNB_MAC_INST *nrmac)
         cc->total_prach_occasions,
         cc->num_active_ssb,
         unused_RA_occasion,
-        cc->max_association_period,
+        cc->association_period,
         prach_info.N_RA_sfn,
         cc->total_prach_occasions_per_config_period);
 }
@@ -401,7 +408,7 @@ void schedule_nr_prach(module_id_t module_idP, frame_t frameP, slot_t slotP)
         nfapi_nr_prach_pdu_t *prach_pdu = &newpdu->prach_pdu;
         for (int td_index = 0; td_index < N_t_slot; td_index++) {
           uint32_t config_period = cc->prach_info.x;
-          prach_occasion_id = (((frameP % (cc->max_association_period * config_period))/config_period) * cc->total_prach_occasions_per_config_period) +
+          prach_occasion_id = (((frameP % (cc->association_period * config_period))/config_period) * cc->total_prach_occasions_per_config_period) +
                               (RA_sfn_index + slot_index) * N_t_slot * fdm + td_index * fdm + fdm_index;
 
           if (prach_occasion_id >= cc->total_prach_occasions) // to be confirmed: unused occasion?
@@ -414,7 +421,7 @@ void schedule_nr_prach(module_id_t module_idP, frame_t frameP, slot_t slotP)
             // ordered ssb number
             int n_ssb = (int) (prach_occasion_id / (int)(1 / num_ssb_per_RO)) % cc->num_active_ssb;
             // fapi beam index
-            beam_index = get_fapi_beamforming_index(gNB, cc->ssb_index[n_ssb]);
+            beam_index = get_beam_from_ssbidx(gNB, cc->ssb_index[n_ssb]);
             // multi-beam allocation structure
             beam = beam_allocation_procedure(&gNB->beam_info, frameP, slotP, beam_index, slots_frame);
             AssertFatal(beam.idx >= 0, "Cannot allocate PRACH corresponding to %d SSB transmitted in any available beam\n", n_ssb + 1);
@@ -422,7 +429,7 @@ void schedule_nr_prach(module_id_t module_idP, frame_t frameP, slot_t slotP)
             int first_ssb_index = (prach_occasion_id * (int)num_ssb_per_RO) % cc->num_active_ssb;
             for(int j = first_ssb_index; j < first_ssb_index + num_ssb_per_RO; j++) {
               // fapi beam index
-              beam_index = get_fapi_beamforming_index(gNB, cc->ssb_index[j]);
+              beam_index = get_beam_from_ssbidx(gNB, cc->ssb_index[j]);
               // multi-beam allocation structure
               beam = beam_allocation_procedure(&gNB->beam_info, frameP, slotP, beam_index, slots_frame);
               AssertFatal(beam.idx >= 0, "Cannot allocate PRACH corresponding to SSB %d in any available beam\n", j);
@@ -509,7 +516,8 @@ void schedule_nr_prach(module_id_t module_idP, frame_t frameP, slot_t slotP)
           prach_pdu->beamforming.num_prgs = 1;
           prach_pdu->beamforming.prg_size = n_ra_rb;
           prach_pdu->beamforming.dig_bf_interface = num_td_occ;
-          prach_pdu->beamforming.prgs_list[0].dig_bf_interface_list[num_td_occ - 1].beam_idx = beam_index;
+          const uint16_t fapi_beam = convert_to_fapi_beam(beam_index, gNB->beam_info.beam_mode);
+          prach_pdu->beamforming.prgs_list[0].dig_bf_interface_list[num_td_occ - 1].beam_idx = fapi_beam;
 
           LOG_D(NR_MAC,
                 "Frame %d, Slot %d: Prach Occasion id = %u  fdm index = %u start symbol = %u slot index = %u subframe index = %u \n",
@@ -755,8 +763,8 @@ void nr_initiate_ra_proc(module_id_t module_idP,
   configure_UE_BWP(nr_mac, scc, UE, true, NR_SearchSpace__searchSpaceType_PR_common, -1, -1);
   // return current SSB order in the list of tranmitted SSBs
   int n_ssb = ssb_index_from_prach(module_idP, frame, slot, preamble_index, freq_index, symbol);
-  UE->UE_beam_index = get_fapi_beamforming_index(nr_mac, cc->ssb_index[n_ssb]);
-
+  UE->UE_beam_index = get_beam_from_ssbidx(nr_mac, cc->ssb_index[n_ssb]);
+  LOG_I(NR_MAC, "UE %04x: Sync beam index %d\n", UE->rnti, UE->UE_beam_index);
   NR_SCHED_UNLOCK(&nr_mac->sched_lock);
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_INITIATE_RA_PROC, 0);
 }
@@ -893,7 +901,8 @@ static void nr_generate_Msg3_retransmission(module_id_t module_idP,
                                                         0,
                                                         ra->msg3_round,
                                                         ul_bwp->pusch_Config && ul_bwp->pusch_Config->frequencyHopping,
-                                                        UE->rnti);
+                                                        UE->rnti,
+                                                        nr_mac->beam_info.beam_mode);
     future_ul_tti_req->n_pdus += 1;
 
     // generation of DCI 0_0 to schedule msg3 retransmission
@@ -926,14 +935,9 @@ static void nr_generate_Msg3_retransmission(module_id_t module_idP,
     }
 
     // Fill PDCCH DL DCI PDU
-    nfapi_nr_dl_dci_pdu_t *dci_pdu = prepare_dci_pdu(pdcch_pdu_rel15,
-                                                     scc,
-                                                     ss,
-                                                     coreset,
-                                                     aggregation_level,
-                                                     CCEIndex,
-                                                     UE->UE_beam_index,
-                                                     UE->rnti);
+    const uint16_t fapi_beam = convert_to_fapi_beam(UE->UE_beam_index, nr_mac->beam_info.beam_mode);
+    nfapi_nr_dl_dci_pdu_t *dci_pdu =
+        prepare_dci_pdu(pdcch_pdu_rel15, scc, ss, coreset, aggregation_level, CCEIndex, fapi_beam, UE->rnti);
     pdcch_pdu_rel15->numDlDci++;
 
     dci_pdu_rel15_t uldci_payload = {0};
@@ -1197,7 +1201,8 @@ static void nr_add_msg3(module_id_t module_idP, int CC_id, frame_t frameP, slot_
                                                       0,
                                                       0,
                                                       ul_bwp->pusch_Config && ul_bwp->pusch_Config->frequencyHopping,
-                                                      UE->rnti);
+                                                      UE->rnti,
+                                                      mac->beam_info.beam_mode);
   future_ul_tti_req->n_pdus += 1;
 
   // calling function to fill rar message
@@ -1319,6 +1324,7 @@ static void prepare_dl_pdus(gNB_MAC_INST *nr_mac,
   NR_COMMON_channels_t *cc = &nr_mac->common_channels[CC_id];
   NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
   NR_UE_DL_BWP_t *dl_bwp = &UE->current_DL_BWP;
+  const uint16_t fapi_beam = convert_to_fapi_beam(UE->UE_beam_index, nr_mac->beam_info.beam_mode);
   nfapi_nr_dl_tti_pdsch_pdu_rel15_t *pdsch_pdu_rel15 = prepare_pdsch_pdu(dl_tti_pdsch_pdu,
                                                                          nr_mac,
                                                                          UE,
@@ -1327,19 +1333,13 @@ static void prepare_dl_pdus(gNB_MAC_INST *nr_mac,
                                                                          false,
                                                                          round,
                                                                          rnti,
-                                                                         UE->UE_beam_index,
+                                                                         fapi_beam,
                                                                          1,
                                                                          pduindex);
 
   /* Fill PDCCH DL DCI PDU */
-  nfapi_nr_dl_dci_pdu_t *dci_pdu = prepare_dci_pdu(pdcch_pdu_rel15,
-                                                   scc,
-                                                   sched_ctrl->search_space,
-                                                   coreset,
-                                                   aggregation_level,
-                                                   CCEIndex,
-                                                   UE->UE_beam_index,
-                                                   rnti);
+  nfapi_nr_dl_dci_pdu_t *dci_pdu =
+      prepare_dci_pdu(pdcch_pdu_rel15, scc, sched_ctrl->search_space, coreset, aggregation_level, CCEIndex, fapi_beam, rnti);
   pdcch_pdu_rel15->numDlDci++;
 
   dci_pdu_rel15_t dci_payload = prepare_dci_dl_payload(nr_mac,

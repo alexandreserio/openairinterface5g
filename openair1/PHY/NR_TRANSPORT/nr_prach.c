@@ -103,7 +103,6 @@ prach_item_t *nr_schedule_rx_prach(PHY_VARS_gNB *gNB, int SFN, int Slot, nfapi_n
       int bitmap = SL_to_bitmap(start_symb, n_symb);
       prach->beams[i] = beam_index_allocation(gNB->enable_analog_das,
                                               fapi_beam_idx,
-                                              &gNB->gNB_config.analog_beamforming_ve,
                                               &gNB->common_vars,
                                               Slot,
                                               NR_NUMBER_OF_SYMBOLS_PER_SLOT,
@@ -362,7 +361,7 @@ static void rx_nr_prach_ru_internal(prach_item_t *p,
     // Fixme: slot or slot makes no sense ???
     int slot2 = p->prach_sequence_length ? p->slot : p->slot;
     int idx = aa + beam_id * p->nb_rx;
-    c16_t *prach = (c16_t *)&rxdata[idx][fp->get_samples_slot_timestamp(slot2, fp, 0) + sample_offset_slot - N_TA_offset];
+    c16_t *prach = (c16_t *)&rxdata[idx][get_samples_slot_timestamp(fp, slot2) + sample_offset_slot - N_TA_offset];
 
     // do DFT
     c16_t *prach2 = prach + Ncp;

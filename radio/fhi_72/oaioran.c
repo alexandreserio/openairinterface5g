@@ -173,6 +173,9 @@ static int read_prach_data(ru_info_t *ru, int frame, int slot)
   struct xran_fh_init *fh_init = get_xran_fh_init();
   struct xran_fh_config *fh_cfg = get_xran_fh_config(0);
   nr_prach_info_t prach_info = get_prach_info(0);
+
+  int prach_start_sym = prach_info.start_symbol;
+  int prach_end_sym = prach_info.N_dur + prach_start_sym;
   struct xran_ru_config *ru_conf = &fh_cfg->ru_conf;
   int slots_per_frame = 10 << fh_cfg->frame_conf.nNumerology;
   int slots_per_subframe = 1 << fh_cfg->frame_conf.nNumerology;
@@ -190,7 +193,7 @@ static int read_prach_data(ru_info_t *ru, int frame, int slot)
       LOG_W(HW, "we get rach data from ru, but it is not scheduled %d.%d\n", frame, slot);
       return -1;
     }
-    for (sym_idx = 0; sym_idx < prach_info.N_dur; sym_idx++) {
+    for (sym_idx = prach_start_sym; sym_idx < prach_end_sym; sym_idx++) {
       for (int aa = 0; aa < ru->nb_rx; aa++) {
         int16_t *dst, *src;
         int idx = 0;
@@ -200,7 +203,7 @@ static int read_prach_data(ru_info_t *ru, int frame, int slot)
         src = (int16_t *)bufs->prachdstdecomp[aa % nb_rx_per_ru][tti % XRAN_N_FE_BUF_LEN].pBuffers[sym_idx].pData;
         /* convert Network order to host order */
         if (ru_conf->compMeth_PRACH == XRAN_COMPMETHOD_NONE) {
-          if (sym_idx == 0) {
+          if (sym_idx == prach_start_sym) {
             for (idx = 0; idx < 139 * 2; idx++) {
               dst[idx] = ((int16_t)ntohs(src[idx + g_kbar]));
             }
@@ -233,7 +236,7 @@ static int read_prach_data(ru_info_t *ru, int frame, int slot)
           AssertFatal(1 == 0, "BFP decompression not supported on this architecture");
 #endif
           // note: this is hardwired for 139 point PRACH sequence, kbar=2
-          if (sym_idx == 0) //
+          if (sym_idx == prach_start_sym)
             for (idx = 0; idx < (139 * 2); idx++)
               dst[idx] = local_dst[idx + g_kbar];
           else
@@ -338,7 +341,7 @@ int xran_fh_rx_read_slot(ru_info_t *ru, int *frame, int *slot)
 
   const struct xran_fh_init *fh_init = get_xran_fh_init();
   int nPRBs = fh_cfg->nULRBs;
-  int fftsize = 1 << fh_cfg->ru_conf.fftSize;
+  int fftsize = 1 << fh_cfg->nULFftSize;
 
   int slot_offset_rxdata = 3 & (*slot);
   uint32_t slot_size = 4 * 14 * fftsize;
@@ -496,7 +499,7 @@ int xran_fh_tx_send_slot(ru_info_t *ru, int frame, int slot, uint64_t timestamp)
   const struct xran_fh_init *fh_init = get_xran_fh_init();
   const struct xran_fh_config *fh_cfg = get_xran_fh_config(0);
   int nPRBs = fh_cfg->nDLRBs;
-  int fftsize = 1 << fh_cfg->ru_conf.fftSize;
+  int fftsize = 1 << fh_cfg->nDLFftSize;
   int nb_tx_per_ru = ru->nb_tx / fh_init->xran_ports;
   int nb_rx_per_ru = ru->nb_rx / fh_init->xran_ports;
 

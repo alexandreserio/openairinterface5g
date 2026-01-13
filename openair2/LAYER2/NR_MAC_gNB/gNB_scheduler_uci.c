@@ -94,7 +94,8 @@ static void nr_fill_nfapi_pucch(gNB_MAC_INST *nrmac, frame_t frame, slot_t slot,
                      pucch->csi_bits,
                      pucch->dai_c,
                      pucch->sr_flag,
-                     pucch->r_pucch);
+                     pucch->r_pucch,
+                     nrmac->beam_info.beam_mode);
 }
 
 #define MIN_RSRP_VALUE -141
@@ -280,7 +281,10 @@ void nr_csi_meas_reporting(int Mod_idP,frame_t frame, slot_t slot)
 
       const int pucch_index = get_pucch_index(sched_frame, sched_slot, &nrmac->frame_structure, sched_ctrl->sched_pucch_size);
       NR_sched_pucch_t *curr_pucch = &sched_ctrl->sched_pucch[pucch_index];
-      AssertFatal(curr_pucch->active == false, "CSI structure is scheduled in advance. It should be free!\n");
+      if (curr_pucch->active) {
+        LOG_E(NR_MAC, "CSI structure is scheduled in advance. It should be free!\n");
+        memset(curr_pucch, 0, sizeof(*curr_pucch));
+      }
       curr_pucch->r_pucch = -1;
       curr_pucch->frame = sched_frame;
       curr_pucch->ul_slot = sched_slot;
@@ -977,11 +981,6 @@ void handle_nr_uci_pucch_2_3_4(module_id_t mod_id, frame_t frame, slot_t slot, c
     return;
   }
 
-  NR_CSI_MeasConfig_t *csi_MeasConfig = UE->sc_info.csi_MeasConfig;
-  if (csi_MeasConfig == NULL) {
-    NR_SCHED_UNLOCK(&nrmac->sched_lock);
-    return;
-  }
   NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
 
   // tpc (power control)
@@ -1017,8 +1016,11 @@ void handle_nr_uci_pucch_2_3_4(module_id_t mod_id, frame_t frame, slot_t slot, c
   if ((uci_234->pduBitmap >> 2) & 0x01) {
     LOG_D(NR_MAC, "CSI CRC %d\n", uci_234->csi_part1.csi_part1_crc);
     if (uci_234->csi_part1.csi_part1_crc != 1) {
-      // API to parse the csi report and store it into sched_ctrl
-      extract_pucch_csi_report(csi_MeasConfig, uci_234, frame, slot, UE, nrmac);
+      NR_CSI_MeasConfig_t *csi_MeasConfig = UE->sc_info.csi_MeasConfig;
+      if (csi_MeasConfig != NULL) {
+        // API to parse the csi report and store it into sched_ctrl
+        extract_pucch_csi_report(csi_MeasConfig, uci_234, frame, slot, UE, nrmac);
+      }
     }
     free(uci_234->csi_part1.csi_part1_payload);
   }

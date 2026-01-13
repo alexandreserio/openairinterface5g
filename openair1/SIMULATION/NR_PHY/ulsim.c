@@ -1061,8 +1061,8 @@ int main(int argc, char *argv[])
   //for (int i=0;i<16;i++) printf("%f\n",gaussdouble(0.0,1.0));
   int read_errors=0;
 
-  int slot_offset = gNB->frame_parms.get_samples_slot_timestamp(slot, &gNB->frame_parms, 0);
-  int slot_length = slot_offset - gNB->frame_parms.get_samples_slot_timestamp(slot - 1, &gNB->frame_parms, 0);
+  int slot_offset = get_samples_slot_timestamp(&gNB->frame_parms, slot);
+  int slot_length = slot_offset - get_samples_slot_timestamp(&gNB->frame_parms, slot - 1);
 
   if (input_fd != NULL)	{
     // 800 samples is N_TA_OFFSET for FR1 @ 30.72 Ms/s,
@@ -1382,7 +1382,7 @@ int main(int argc, char *argv[])
 
           /////////////////////////phy_procedures_nr_ue_TX///////////////////////
           ///////////
-          int slot_start = UE->frame_parms.get_samples_slot_timestamp(slot, &UE->frame_parms, 0);
+          int slot_start = get_samples_slot_timestamp(&UE->frame_parms, slot);
           c16_t *tx[UE->frame_parms.nb_antennas_tx];
           for (int i = 0; i < UE->frame_parms.nb_antennas_tx; i++)
             tx[i] = UE->common_vars.txData[i] + slot_start;
@@ -1400,7 +1400,7 @@ int main(int argc, char *argv[])
           }
           ///////////
           ////////////////////////////////////////////////////
-          tx_offset = gNB->frame_parms.get_samples_slot_timestamp(slot, &gNB->frame_parms, 0);
+          tx_offset = get_samples_slot_timestamp(&gNB->frame_parms, slot);
           txlev_sum = 0;
           for (int aa = 0; aa < UE->frame_parms.nb_antennas_tx; aa++) {
             atxlev[aa] =
@@ -1742,7 +1742,7 @@ int main(int argc, char *argv[])
       printStatIndent2(&gNB->rx_pusch_symbol_processing_stats, "RX PUSCH Symbol Processing time");
       printStatIndent(&gNB->ulsch_decoding_stats,"ULSCH total decoding time");
       printStatIndent2(&gNB->ts_deinterleave, "ULSCH segment deinterleaving time");
-      printStatIndent2(&gNB->ts_rate_unmatch, "ULSCH segment rate recovery time");
+      printStatIndent2(&gNB->ts_rate_unmatch, "ULSCH segment rate matching time");
       printStatIndent2(&gNB->ts_ldpc_decode, "ULSCH segments decoding time");
       printStatIndent(&gNB->rx_srs_stats,"RX SRS time");
       printStatIndent2(&gNB->generate_srs_stats,"Generate SRS sequence time");
