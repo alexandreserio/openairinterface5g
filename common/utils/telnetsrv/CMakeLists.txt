@@ -80,8 +80,14 @@ add_library(telnetsrv_o1 MODULE telnetsrv_o1.c)
 target_link_libraries(telnetsrv_o1 PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)
 add_dependencies(telnetsrv telnetsrv_o1)
 
+# Added Dynamic Parameters modification for Altice 
+message(STATUS "Add CI specific telnet functions in libtelnetsrv_altice.so")
+add_library(telnetsrv_altice MODULE telnetsrv_altice.c)
+target_link_libraries(telnetsrv_altice PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs)
+add_dependencies(telnetsrv telnetsrv_altice)
+
 # all libraries should be written to root build dir
-set_target_properties(telnetsrv telnetsrv_enb telnetsrv_5Gue telnetsrv_ci telnetsrv_ciUE
+set_target_properties(telnetsrv telnetsrv_altice telnetsrv_enb telnetsrv_5Gue telnetsrv_ci telnetsrv_ciUE
                       telnetsrv_bearer telnetsrv_rrc telnetsrv_o1
                       PROPERTIES LIBRARY_OUTPUT_DIRECTORY ../../..
 )
