@@ -1553,5 +1553,43 @@ extern "C" {
   }
   return 0;
 }
+
+int usrp_get_actual_gains(openair0_device *device,
+                          double *rx_gains,
+                          double *tx_gains,
+                          int max_channels,
+                          int *num_rx,
+                          int *num_tx)
+{
+  if (device == NULL || device->priv == NULL || rx_gains == NULL || tx_gains == NULL || max_channels <= 0)
+    return -1;
+
+  usrp_state_t *s = (usrp_state_t *)device->priv;
+  if (!s || !s->usrp)
+    return -1;
+
+  int rx_ch = 0;
+  int tx_ch = 0;
+  if (device->openair0_cfg != NULL) {
+    rx_ch = device->openair0_cfg[0].rx_num_channels;
+    tx_ch = device->openair0_cfg[0].tx_num_channels;
+  }
+
+  if (num_rx)
+    *num_rx = rx_ch;
+  if (num_tx)
+    *num_tx = tx_ch;
+
+  int rx_lim = rx_ch < max_channels ? rx_ch : max_channels;
+  int tx_lim = tx_ch < max_channels ? tx_ch : max_channels;
+
+  for (int i = 0; i < rx_lim; ++i)
+    rx_gains[i] = s->usrp->get_rx_gain(i);
+
+  for (int i = 0; i < tx_lim; ++i)
+    tx_gains[i] = s->usrp->get_tx_gain(i);
+
+  return 0;
+}
 /*@}*/
 }/* extern c */

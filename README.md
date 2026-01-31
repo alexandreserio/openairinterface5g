@@ -80,6 +80,35 @@ openairinterface5g
 └── tools             : Tools for use by the developers/ci machines: code analysis and formatting
 ```
 
+# Altice telnet commands (telnetsrv_altice.c) #
+
+Build the telnet server library:
+
+```bash
+sudo ./build_oai --ninja -w USRP --nrUE --gNB --build-lib telnetsrv
+```
+
+Run gNB with the Altice telnet module:
+
+```bash
+sudo ./nr-softmodem -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.fr1.106PRB.pci1.rfsim.conf --telnetsrv --telnetsrv.shrmod altice
+```
+
+Example telnet session (local host):
+
+```text
+telnet 127.0.0.1 9090
+altice get_gNB_max_rxgain
+altice set_gNB_max_rxgain 80
+altice get_gNB_att_rx
+altice set_gNB_att_rx 10
+altice get_gNB_att_tx
+altice set_gNB_att_tx 5
+altice get_gNB_ta_offset
+altice set_gNB_ta_offset 624
+altice get_usrp_actual_gains
+```
+
 # How to get support from the OAI Community # 
 
 You can ask your question on the [mailing lists](https://gitlab.eurecom.fr/oai/openairinterface5g/-/wikis/MailingList).
