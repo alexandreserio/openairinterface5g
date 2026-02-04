@@ -80,6 +80,25 @@ openairinterface5g
 └── tools             : Tools for use by the developers/ci machines: code analysis and formatting
 ```
 
+# How to get support from the OAI Community # 
+
+You can ask your question on the [mailing lists](https://gitlab.eurecom.fr/oai/openairinterface5g/-/wikis/MailingList).
+
+Your email should contain below information:
+
+- A clear subject in your email.
+- For all the queries there should be [Query\] in the subject of the email and for problems there should be [Problem\].
+- In case of a problem, add a small description.
+- Do not share any photos unless you want to share a diagram.
+- OAI gNB/DU/CU/CU-CP/CU-UP configuration file in `.conf` format only.
+- Logs of OAI gNB/DU/CU/CU-CP/CU-UP in `.log` or `.txt` format only.
+- In case your question is related to performance, include a small description of the machine (Operating System, Kernel version, CPU, RAM and networking card) and diagram of your testing environment.
+- Known/open issues are present on [GitLab](https://gitlab.eurecom.fr/oai/openairinterface5g/-/issues), so keep checking.
+
+Always remember a structured email will help us understand your issues quickly.
+
+
+
 # Altice telnet commands (telnetsrv_altice.c) #
 
 Build the telnet server library:
@@ -108,20 +127,3 @@ altice get_gNB_ta_offset
 altice set_gNB_ta_offset 624
 altice get_usrp_actual_gains
 ```
-
-# How to get support from the OAI Community # 
-
-You can ask your question on the [mailing lists](https://gitlab.eurecom.fr/oai/openairinterface5g/-/wikis/MailingList).
-
-Your email should contain below information:
-
-- A clear subject in your email.
-- For all the queries there should be [Query\] in the subject of the email and for problems there should be [Problem\].
-- In case of a problem, add a small description.
-- Do not share any photos unless you want to share a diagram.
-- OAI gNB/DU/CU/CU-CP/CU-UP configuration file in `.conf` format only.
-- Logs of OAI gNB/DU/CU/CU-CP/CU-UP in `.log` or `.txt` format only.
-- In case your question is related to performance, include a small description of the machine (Operating System, Kernel version, CPU, RAM and networking card) and diagram of your testing environment.
-- Known/open issues are present on [GitLab](https://gitlab.eurecom.fr/oai/openairinterface5g/-/issues), so keep checking.
-
-Always remember a structured email will help us understand your issues quickly.
