@@ -526,7 +526,7 @@ Contact the RU vendor and get the configuration manual to understand the below c
 The OAI configuration file [`gnb-du.sa.band77.273prb.fhi72.4x4-benetel650.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-du.sa.band77.273prb.fhi72.4x4-benetel650.conf) corresponds to:
 - TDD pattern `DDDSU`, 2.5ms
 - Bandwidth 100MHz
-- MTU 9600
+- MTU 9216
 - 4TX4R
 
 ##### RU configuration
@@ -552,7 +552,7 @@ dl_ul_tuning_special_slot=0xfd00000
 The OAI configuration file [`gnb.sa.band78.273prb.fhi72.4x4-benetel550.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.4x4-benetel550.conf) corresponds to:
 - TDD pattern `DDDDDDDSUU`, 5ms
 - Bandwidth 100MHz
-- MTU 9600
+- MTU 9216
 - 4TX4R
 
 ##### RU configuration
@@ -579,7 +579,7 @@ The OAI configuration file [`gnb.sa.band78.273prb.fhi72.4x4-liteon.conf`](../tar
 - TDD pattern `DDDSU`, 2.5ms
 - Bandwidth 100MHz
 - MTU 1500
-- MTU 9600: v02.00.10
+- MTU 9216: v02.00.10
 
 ##### RU configuration
 
@@ -618,7 +618,7 @@ jumboframe 1 # enable jumbo frame
 The OAI configuration file [`gnb.sa.band77.273prb.fhi72.4x4-vvdn.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band77.273prb.fhi72.4x4-vvdn.conf) corresponds to:
 - TDD pattern `DDDSU`, 2.5ms
 - Bandwidth 100MHz
-- MTU 9600
+- MTU 9216
 
 ##### RU configuration
 
@@ -692,7 +692,7 @@ At this stage, RU must be rebooted so the changes apply.
 The OAI configuration file [`gnb.sa.band78.273prb.fhi72.4X4-foxconn.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.4X4-foxconn.conf) corresponds to:
 - TDD pattern `DDDSU`, 2.5ms
 - Bandwidth 100MHz
-- MTU 9600
+- MTU 9216
 
 ##### RU configuration
 
@@ -719,7 +719,37 @@ RU must be rebooted so the changes apply.
 - The measured throughput was **520 Mbps DL** and **40 Mbps UL**.
 - With newer OAI versions, throughput degrades. This issue is currently under investigation.
 
-### Configure Network Interfaces and DPDK VFs
+#### ProtO-RU
+
+[ProtO-RU](https://github.com/NUS-CIR/ProtO-RU) is a software implementation of an O-RAN 7.2 RU using a NI USRP.
+Different from other COTS RUs, ProtO-RU requires a larger DU delay profile which is larger than the TTI interval.
+
+The OAI configuration file [`gnb.sa.band78.106prb.fhi72.1x1-proto-ru.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.106prb.fhi72.1x1-proto-ru.conf) corresponds to:
+
+- TDD pattern `DDDSU`, 2.5ms
+- Bandwidth 40MHz
+- MTU 9216
+- 1T1R
+
+##### RU configuration
+
+First, compile the RU as outlined in the [building ProtO-RU tutorial](https://github.com/NUS-CIR/ProtO-RU/tree/proto-ru?tab=readme-ov-file#building-proto-ru).
+Then, ensure that both your DU and ProtO-RU host are PTP synchronized.
+
+Next, use the RU config, [protoru-OAI-B210-TDD-n78-40MHz-1x1-30kHz.yml](https://github.com/NUS-CIR/ProtO-RU/blob/proto-ru/proto-ru/conf-files/protoru-OAI-B210-TDD-n78-40MHz-1x1-30kHz.yml), which corresponds to the above mentioned DU config file. 
+In addition, please adapt the DU MAC address and VLAN tag to your needs.
+
+ProtO-RU was successfully tested with USRP B210.
+If you are using a different SDR (e.g., N310), you will need to update the ProtO-RU and the DU configurations accordingly.
+
+Launch ProtO-RU with the adapted configuration file with the command:
+```bash
+sudo ./ru_emulator -c <path-to/protoru-OAI-B210-TDD-n78-40MHz-1x1-30kHz.yml>
+```
+
+Finally, start the OAI gNB.
+
+## Configure Network Interfaces and DPDK VFs
 
 The 7.2 fronthaul uses the xran library, which requires DPDK. In this step, we
 need to configure network interfaces to send data to the RU, and configure DPDK
@@ -895,7 +925,7 @@ We recommand to put the above four steps into one script file to quickly repeat 
 set -x
 IF_NAME=eno12409
 MAX_RING_BUFFER_SIZE=4096
-MTU=9600
+MTU=9216
 DU_U_PLANE_MAC_ADD=00:11:22:33:44:66
 DU_C_PLANE_MAC_ADD=00:11:22:33:44:67
 VLAN=3
@@ -931,12 +961,13 @@ Sample configuration files for OAI gNB, specific to the manufacturer of the radi
 2. VVDN RU:
 [`gnb.sa.band77.273prb.fhi72.4x4-vvdn.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band77.273prb.fhi72.4x4-vvdn.conf)
 [`gnb.sa.band77.106prb.fhi72.4x4-vvdn.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band77.106prb.fhi72.4x4-vvdn.conf)
-[`gnb.sa.band77.273prb.fhi72.2x2-vvdn.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band77.273prb.fhi72.2x2-vvdn.conf)
+[`gnb.sa.band77.273prb.fhi72.2x2-vvdn-16b.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band77.273prb.fhi72.2x2-vvdn-16b.conf)
 3. Benetel 650 RU:
 [`gnb-du.sa.band77.273prb.fhi72.4x4-benetel650.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-du.sa.band77.273prb.fhi72.4x4-benetel650.conf)
 4. Benetel 550 RU:
 [`gnb.sa.band78.273prb.fhi72.4x4-benetel550.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.4x4-benetel550.conf)
 [`gnb.sa.band78.273prb.fhi72.4x2-benetel550.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.4x2-benetel550.conf)
+[`gnb.sa.band78.273prb.fhi72.2x2-benetel550-16b.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.2x2-benetel550-16b.conf) - only with E release; with F, UL U-plane fragmentation is not correct
 5. Metanoia RU:
 [`gnb.sa.band78.273prb.fhi72.4x4-metanoia.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.4x4-metanoia.conf)
 
@@ -970,7 +1001,7 @@ Edit the sample OAI gNB configuration file and check following parameters:
   * `io_core`: absolute CPU core ID for XRAN library, it should be an isolated core, in our environment we are using CPU 4
   * `worker_cores`: array of absolute CPU core IDs for XRAN library, they should be isolated cores, in our environment we are using CPU 2
   * `ru_addr`: RU U- and C-plane MAC-addresses (format `UU:VV:WW:XX:YY:ZZ`, hexadecimal numbers)
-  * `mtu`: Maximum Transmission Unit for the RU, specified by RU vendor; either 1500 or 9600 B (Jumbo Frames); if not set, 1500 is used
+  * `mtu`: Maximum Transmission Unit for the RU, specified by RU vendor; either 1500 or 9600 B (Jumbo Frames); if not set, 1500 is used; if the testbed contains a switch, and its max supported MTU < 9600, then please set the same value in the config file as well
   * `file_prefix` : used to specify a unique prefix for shared memory and files created by multiple DPDK processes; if not set, default value of `wls_0` is used
   * `dpdk_mem_size`: the huge page size that should be pre-allocated by DPDK
     _for NUMA node 0_; by default, this is 8192 MiB (corresponding to 8 huge
@@ -1171,7 +1202,7 @@ fhi_72 = {
   io_core = 1;
   worker_cores = (2);
   ru_addr = ("8c:1f:64:d1:10:46","8c:1f:64:d1:10:46","8c:1f:64:d1:10:43","8c:1f:64:d1:10:43")
-  mtu = 9600;
+  mtu = 9216;
   fh_config = (
 # RAN650 #1
    {
@@ -1587,11 +1618,11 @@ sequenceDiagram
 [HW]   [MPLANE] Watchdog timer answer: 
 	<next-update-at xmlns="urn:o-ran:supervision:1.0">2025-03-30T08:52:31+02:00</next-update-at>
 
-[HW]   [MPLANE] Interface MTU 1500 unreliable/not correctly reported by Benetel O-RU, hardcoding to 9600.
+[HW]   [MPLANE] Interface MTU 1500 unreliable/not correctly reported by Benetel O-RU, hardcoding to 9216.
 [HW]   [MPLANE] IQ bitwidth 16 unreliable/not correctly reported by Benetel O-RU, hardcoding to 9.
 [HW]   [MPLANE] Storing the following information to forward to xran:
     RU MAC address 8c:1f:64:d1:11:c0
-    MTU 9600
+    MTU 9216
     IQ bitwidth 9
     PRACH offset 4
     DU port bitmask 61440
@@ -2238,11 +2269,11 @@ sequenceDiagram
 [HW]   [MPLANE] Watchdog timer answer: 
 	<next-update-at xmlns="urn:o-ran:supervision:1.0">2025-08-29T06:49:32+02:00</next-update-at>
 
-[HW]   [MPLANE] Interface MTU 1500 unreliable/not correctly reported by Benetel O-RU, hardcoding to 9600.
+[HW]   [MPLANE] Interface MTU 1500 unreliable/not correctly reported by Benetel O-RU, hardcoding to 9216.
 [HW]   [MPLANE] IQ bitwidth 16 unreliable/not correctly reported by Benetel O-RU, hardcoding to 9.
 [HW]   [MPLANE] Storing the following information to forward to xran:
     RU MAC address 70:b3:d5:e1:5b:81
-    MTU 9600
+    MTU 9216
     IQ bitwidth 9
     PRACH offset 4
     DU port bitmask 61440

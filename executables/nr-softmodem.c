@@ -114,9 +114,6 @@ double tx_gain[MAX_NUM_CCs][4] = {{20,0,0,0},{20,0,0,0}};
 double rx_gain[MAX_NUM_CCs][4] = {{110,0,0,0},{20,0,0,0}};
 #endif
 
-double rx_gain_off = 0.0;
-
-static int tx_max_power[MAX_NUM_CCs]; /* =  {0,0}*/;
 int chain_offset = 0;
 int numerology = 0;
 double cpuf;
@@ -527,7 +524,6 @@ int main( int argc, char **argv ) {
   setvbuf(stderr, NULL, _IONBF, 0);
 #endif
   mode = normal_txrx;
-  memset(tx_max_power,0,sizeof(int)*MAX_NUM_CCs);
   logInit();
   lock_memory_to_ram();
   get_options(uniqCfg);
@@ -679,11 +675,28 @@ int main( int argc, char **argv ) {
     wait_nfapi_init("main?");
   }
 
+  if (IS_SOFTMODEM_IMSCOPE_ENABLED || IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED) {
+    sleep(1);
+    scopeParms_t p;
+    p.argc = &argc;
+    p.argv = argv;
+    p.gNB = RC.gNB[0];
+    p.ru = RC.ru[0];
+    if (IS_SOFTMODEM_IMSCOPE_ENABLED) {
+      load_softscope("im", &p);
+    }
+    AssertFatal(!(IS_SOFTMODEM_IMSCOPE_ENABLED && IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED),
+                "Data recoding and ImScope cannot be enabled at the same time\n");
+    if (IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED) {
+      load_module_shlib("imscope_record", NULL, 0, &p);
+    }
+  }
+
   if (RC.nb_nr_L1_inst > 0) {
     wait_RUs();
     // once all RUs are ready initialize the rest of the gNBs ((dependence on final RU parameters after configuration)
 
-    if (IS_SOFTMODEM_DOSCOPE || IS_SOFTMODEM_IMSCOPE_ENABLED || IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED) {
+    if (IS_SOFTMODEM_DOSCOPE) {
       sleep(1);
       scopeParms_t p;
       p.argc = &argc;
@@ -692,14 +705,6 @@ int main( int argc, char **argv ) {
       p.ru = RC.ru[0];
       if (IS_SOFTMODEM_DOSCOPE) {
         load_softscope("nr", &p);
-      }
-      if (IS_SOFTMODEM_IMSCOPE_ENABLED) {
-        load_softscope("im", &p);
-      }
-      AssertFatal(!(IS_SOFTMODEM_IMSCOPE_ENABLED && IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED),
-                  "Data recoding and ImScope cannot be enabled at the same time\n");
-      if (IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED) {
-        load_module_shlib("imscope_record", NULL, 0, &p);
       }
     }
 
