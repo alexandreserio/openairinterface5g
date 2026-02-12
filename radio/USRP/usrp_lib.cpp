@@ -879,7 +879,7 @@ int trx_usrp_set_gains(openair0_device_t *device,
 {
   usrp_state_t *s = (usrp_state_t *)device->priv;
   ::uhd::gain_range_t gain_range_tx = s->usrp->get_tx_gain_range(0);
-  s->usrp->set_tx_gain(gain_range_tx.stop()-openair0_cfg[0].tx_gain[0]);
+  s->usrp->set_tx_gain(openair0_cfg[0].tx_gain[0]);
   ::uhd::gain_range_t gain_range = s->usrp->get_rx_gain_range(0);
 
   // limit to maximum gain
@@ -1375,6 +1375,7 @@ extern "C" {
       set_rx_gain_offset(cfg, i, bw_gain_adjust);
       ::uhd::gain_range_t gain_range = s->usrp->get_rx_gain_range(i+choffset);
       // limit to maximum gain
+      cfg->rx_gain_offset[i] = 0;
       double gain = cfg->rx_gain[i] - cfg->rx_gain_offset[i];
       if ( gain > gain_range.stop())  {
         LOG_E(HW, "RX Gain too high, lower by %f dB\n", gain - gain_range.stop());
@@ -1402,8 +1403,8 @@ extern "C" {
       uhd::tune_request_t tx_tune_req(openair0_cfg[0].tx_freq[i],
                                       openair0_cfg[0].tune_offset);
       s->usrp->set_tx_freq(tx_tune_req, i+choffset);
-      s->usrp->set_tx_gain(gain_range_tx.stop()-openair0_cfg[0].tx_gain[i],i+choffset);
-      LOG_I(HW,"USRP TX_GAIN:%3.2lf gain_range:%3.2lf tx_gain:%3.2lf\n", gain_range_tx.stop()-openair0_cfg[0].tx_gain[i], gain_range_tx.stop(), openair0_cfg[0].tx_gain[i]);
+      s->usrp->set_tx_gain(openair0_cfg[0].tx_gain[i],i+choffset);
+      LOG_I(HW,"USRP TX_GAIN:%3.2lf gain_range:%3.2lf tx_gain:%3.2lf\n", openair0_cfg[0].tx_gain[i], gain_range_tx.stop(), openair0_cfg[0].tx_gain[i]);
     }
   }
 

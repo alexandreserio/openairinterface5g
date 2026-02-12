@@ -849,7 +849,14 @@ static void fill_rf_config(RU_t *ru, char *rf_config_file)
       cfg->tx_freq[i] = ru->if_frequency;
     }
 
-    cfg->tx_gain[i] = ru->att_tx;
+    // cfg->tx_gain[i] = ru->att_tx; [ALEX]
+    if(strstr(cfg->sdr_addrs, "x300") != NULL){
+      cfg->tx_gain[i] = 31.5 - (double)ru->att_tx;
+    } else if(strstr(cfg->sdr_addrs, "b200") != NULL){
+      cfg->tx_gain[i] = 89.75 - (double)ru->att_tx;
+    } else {
+      cfg->tx_gain[i] = 89.75 - (double)ru->att_tx;
+    }
     LOG_I(PHY, "Channel %d: setting tx_gain offset %.0f, tx_freq %.0f Hz\n", 
           i, cfg->tx_gain[i],cfg->tx_freq[i]);
   }
