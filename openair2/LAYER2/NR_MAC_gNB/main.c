@@ -133,6 +133,12 @@ static char *st_append(char *start, const char *end, const char *format, ...)
 
 size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset_rsrp)
 {
+  FILE* file; //ADDED ALEX
+  file = fopen("gnb_measurements.md", "a"); //ADDED ALEX
+  if(file == NULL){ //ADDED ALEX
+    LOG_E(UTIL, "fopen() failed\n");
+  }
+
   const char *begin = output;
   const char *end = output + strlen;
 
@@ -206,6 +212,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                        UE->current_DL_BWP.mcsTableIdx,
                        sched_ctrl->dl_bler_stats.mcs,
                        sched_ctrl->dl_cce_fail);
+    fprintf(file, "avg_RSRP %d meas %d DL_BLER %.5f ", avg_rsrp, stats->num_rsrp_meas, sched_ctrl->dl_bler_stats.bler); //ADDED ALEX
     if (reset_rsrp) {
       stats->num_rsrp_meas = 0;
       stats->cumul_rsrp = 0;
@@ -233,7 +240,9 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                        sched_ctrl->pusch_snrx10 / 10,
                        sched_ctrl->pusch_snrx10 % 10,
                        sched_ctrl->ul_cce_fail);
-   output = st_append(output,
+    fprintf(file, "UL_BLER %.5f SNR %d.%d \n", sched_ctrl->dl_bler_stats.bler, sched_ctrl->pusch_snrx10/10, sched_ctrl->pusch_snrx10%10); //ADDED ALEX
+    
+    output = st_append(output,
                        end,
                        "UE %04x: MAC:    TX %14"PRIu64" RX %14"PRIu64" bytes\n",
                        UE->rnti, stats->dl.total_bytes, stats->ul.total_bytes);
@@ -250,6 +259,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     }
   }
   DevAssert(output <= end);
+  fclose(file); //ADDED ALEX
   return output - begin;
 }
 
