@@ -857,6 +857,7 @@ static void fill_rf_config(RU_t *ru, char *rf_config_file)
     } else {
       cfg->tx_gain[i] = 89.75 - (double)ru->att_tx;
     }
+    
     LOG_I(PHY, "Channel %d: setting tx_gain offset %.0f, tx_freq %.0f Hz\n", 
           i, cfg->tx_gain[i],cfg->tx_freq[i]);
   }
