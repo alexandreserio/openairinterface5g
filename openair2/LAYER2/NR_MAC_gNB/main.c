@@ -164,17 +164,17 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     output = st_append(output,
                        end,
                        " %s PH %d dB PCMAX %d dBm",
-                       in_sync ? "in-sync" : "out-of-sync",
+                       in_sync ? "\e[1;32m in-sync \e[0m" : "\e[1;31m out-of-sync \e[0m",
                        sched_ctrl->ph,
                        sched_ctrl->pcmax);
 
     if (stats->num_rsrp_meas)
-      output = st_append(output, end, ", average RSRP %d (%d meas)", avg_rsrp, stats->num_rsrp_meas);
+      output = st_append(output, end, ",\e[0;36m average RSRP \e[1;36m%d\e[0;36m (%d meas)\e[0m", avg_rsrp, stats->num_rsrp_meas);
 
     if (stats->num_sinr_meas) {
       output = st_append(output,
                          end,
-                         ", average SINR %d.%d (%d meas)",
+                         ",\e[0;36m average SINR \e[1;36m%d.%d\e[0;36m (%d meas)\e[0m",
                          avg_sinrx10 / 10,
                          avg_sinrx10 % 10,
                          stats->num_sinr_meas);
@@ -205,7 +205,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
 
     output = st_append(output,
                        end,
-                       ", dlsch_errors %"PRIu64", pucch0_DTX %d, BLER %.5f MCS (%d) %d CCE fail %d\n",
+                       ", dlsch_errors %"PRIu64", pucch0_DTX %d, \e[0;36mBLER \e[1;36m%.5f\e[0m MCS (%d) %d CCE fail %d\n",
                        stats->dl.errors,
                        stats->pucch0_DTX,
                        sched_ctrl->dl_bler_stats.bler,
@@ -228,7 +228,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
 
     output = st_append(output,
                        end,
-                       ", ulsch_errors %"PRIu64", ulsch_DTX %d, BLER %.5f MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d  SNR %d.%d dB CCE fail %d\n",
+                       ", ulsch_errors %"PRIu64", ulsch_DTX %d, \e[0;36mBLER \e[1;36m%.5f\e[0m MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d  \e[0;36mSNR \e[1;36m%d.%d\e[0;36m dB\e[0m CCE fail %d\n",
                        stats->ul.errors,
                        stats->ulsch_DTX,
                        sched_ctrl->ul_bler_stats.bler,
