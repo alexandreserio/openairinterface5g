@@ -255,9 +255,9 @@ static void nr_ulsch_channel_compensation(uint32_t buffer_length,
                 if (iq_file) {
                     fprintf(iq_file, "I,Q\n"); 
                     fflush(iq_file);
-                    printf("DEBUG: CSV file opened successfully\n");
+                    LOG_W(UTIL, "DEBUG: CSV file opened successfully\n"); //ADRIANO
                 } else {
-                    printf("DEBUG: Failed to open CSV file\n");
+                    LOG_D(UTIL, "DEBUG: Failed to open CSV file\n"); //ADRIANO
                 }
                 first_run = 0;
             }

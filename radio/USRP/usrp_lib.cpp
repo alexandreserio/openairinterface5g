@@ -1269,8 +1269,8 @@ extern "C" {
       case 7680000:
         //openair0_cfg[0].samples_per_packet    = 2048;
         openair0_cfg[0].tx_sample_advance     = 50;
-        openair0_cfg[0].tx_bw                 = 5e6;
-        openair0_cfg[0].rx_bw                 = 5e6;
+        openair0_cfg[0].tx_bw                 = 160e6; //ALEX original 5e6
+        openair0_cfg[0].rx_bw                 = 160e6; //ALEX original 5e6
         break;
 
       case 1920000:
@@ -1478,9 +1478,10 @@ extern "C" {
   }
 
   // display USRP settings
-  LOG_I(HW,"Actual master clock: %fMHz...\n",s->usrp->get_master_clock_rate()/1e6);
-  LOG_I(HW,"Actual clock source %s...\n",s->usrp->get_clock_source(0).c_str());
-  LOG_I(HW,"Actual time source %s...\n",s->usrp->get_time_source(0).c_str());
+  LOG_W(HW,"Actual master clock: %fMHz...\n",s->usrp->get_master_clock_rate()/1e6);
+  LOG_W(HW,"Actual clock source %s...\n",s->usrp->get_clock_source(0).c_str());
+  LOG_W(HW,"Actual time source %s...\n",s->usrp->get_time_source(0).c_str());
+  sleep(2); //ALEX
 
   // create tx & rx streamer
   uhd::stream_args_t stream_args_rx("sc16", "sc16");
@@ -1522,22 +1523,23 @@ extern "C" {
 
   for (int i=0; i<openair0_cfg[0].rx_num_channels; i++) {
     LOG_I(HW,"RX Channel %d\n",i);
-    LOG_I(HW,"  Actual RX sample rate: %fMSps...\n",s->usrp->get_rx_rate(i+choffset)/1e6);
-    LOG_I(HW,"  Actual RX frequency: %fGHz...\n", s->usrp->get_rx_freq(i+choffset)/1e9);
-    LOG_I(HW,"  Actual RX gain: %f...\n", s->usrp->get_rx_gain(i+choffset));
+    LOG_W(HW,"  Actual RX sample rate: %fMSps...\n",s->usrp->get_rx_rate(i+choffset)/1e6);
+    LOG_W(HW,"  Actual RX frequency: %fGHz...\n", s->usrp->get_rx_freq(i+choffset)/1e9);
+    LOG_W(HW,"  Actual RX gain: %f...\n", s->usrp->get_rx_gain(i+choffset));
     LOG_I(HW,"  Actual RX bandwidth: %fM...\n", s->usrp->get_rx_bandwidth(i+choffset)/1e6);
     LOG_I(HW,"  Actual RX antenna: %s...\n", s->usrp->get_rx_antenna(i+choffset).c_str());
   }
 
   for (int i=0; i<openair0_cfg[0].tx_num_channels; i++) {
     LOG_I(HW,"TX Channel %d\n",i);
-    LOG_I(HW,"  Actual TX sample rate: %fMSps...\n", s->usrp->get_tx_rate(i+choffset)/1e6);
-    LOG_I(HW,"  Actual TX frequency: %fGHz...\n", s->usrp->get_tx_freq(i+choffset)/1e9);
-    LOG_I(HW,"  Actual TX gain: %f...\n", s->usrp->get_tx_gain(i+choffset));
+    LOG_W(HW,"  Actual TX sample rate: %fMSps...\n", s->usrp->get_tx_rate(i+choffset)/1e6);
+    LOG_W(HW,"  Actual TX frequency: %fGHz...\n", s->usrp->get_tx_freq(i+choffset)/1e9);
+    LOG_W(HW,"  Actual TX gain: %f...\n", s->usrp->get_tx_gain(i+choffset));
     LOG_I(HW,"  Actual TX bandwidth: %fM...\n", s->usrp->get_tx_bandwidth(i+choffset)/1e6);
     LOG_I(HW,"  Actual TX antenna: %s...\n", s->usrp->get_tx_antenna(i+choffset).c_str());
-    LOG_I(HW,"  Actual TX packet size: %lu\n",s->tx_stream->get_max_num_samps());
+    LOG_W(HW,"  Actual TX packet size: %lu\n",s->tx_stream->get_max_num_samps());
   }
+  sleep(3); //ALEX
 
   std::cout << boost::format("Using Device: %s") % s->usrp->get_pp_string() << std::endl;
   LOG_W(HW,"Device timestamp: %f...\n", s->usrp->get_time_now().get_real_secs()); //[ALEX] Changed from I to W

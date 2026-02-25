@@ -94,18 +94,18 @@ uint16_t ue_process_rar(const module_id_t module_idP, const int CC_id, const fra
     return (0xffff);
   }
 
-  LOG_A(MAC,
+  LOG_W(MAC,
         "[UE %d][RAPROC] Frame %d Received RAR (%02x|%02x.%02x.%02x.%02x.%02x.%02x) for preamble %d/%d\n",
         module_idP, frameP, *(uint8_t *) rarh, rar[0], rar[1], rar[2],
-        rar[3], rar[4], rar[5], rarh->RAPID, preamble_index);
+        rar[3], rar[4], rar[5], rarh->RAPID, preamble_index); //ALEX LOG_A --> LOG_W
 #ifdef DEBUG_RAR
   LOG_D(MAC, "[UE %d][RAPROC] rarh->E %d\n", module_idP, rarh->E);
   LOG_D(MAC, "[UE %d][RAPROC] rarh->T %d\n", module_idP, rarh->T);
   LOG_D(MAC, "[UE %d][RAPROC] rarh->RAPID %d\n", module_idP,
         rarh->RAPID);
   //  LOG_I(MAC,"[UE %d][RAPROC] rar->R %d\n",module_idP,rar->R);
-  LOG_D(MAC, "[UE %d][RAPROC] rar->Timing_Advance_Command %d\n",
-        module_idP, (((uint16_t) (rar[0] & 0x7f)) << 4) + (rar[1] >> 4));
+  LOG_W(MAC, "[UE %d][RAPROC] rar->Timing_Advance_Command %d\n",
+        module_idP, (((uint16_t) (rar[0] & 0x7f)) << 4) + (rar[1] >> 4)); //ALEX LOG_D --> LOG_W
   //  LOG_I(MAC,"[UE %d][RAPROC] rar->hopping_flag %d\n",module_idP,rar->hopping_flag);
   //  LOG_I(MAC,"[UE %d][RAPROC] rar->rb_alloc %d\n",module_idP,rar->rb_alloc);
   //  LOG_I(MAC,"[UE %d][RAPROC] rar->mcs %d\n",module_idP,rar->mcs);
