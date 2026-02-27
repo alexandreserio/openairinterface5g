@@ -151,6 +151,7 @@ static void *nrL1_UE_stats_thread(void *param)
 }
 
 static int determine_N_TA_offset(PHY_VARS_NR_UE *ue) {
+  //return 0; //ALEX --> Problems in Msg3 exchange after delay correction for USRP B200 type
   if (ue->sl_mode == 2)
     return 0;
   else {

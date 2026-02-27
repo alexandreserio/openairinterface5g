@@ -879,14 +879,16 @@ int trx_usrp_set_gains(openair0_device_t *device,
 {
   usrp_state_t *s = (usrp_state_t *)device->priv;
   ::uhd::gain_range_t gain_range_tx = s->usrp->get_tx_gain_range(0);
-  s->usrp->set_tx_gain(gain_range_tx.stop()-openair0_cfg[0].tx_gain[0]);
+  //s->usrp->set_tx_gain(gain_range_tx.stop()-openair0_cfg[0].tx_gain[0]);
+  s->usrp->set_tx_gain(openair0_cfg[0].tx_gain[0]); //ALEX
   ::uhd::gain_range_t gain_range = s->usrp->get_rx_gain_range(0);
 
   // limit to maximum gain
   if (openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0] > gain_range.stop()) {
     LOG_E(HW,"RX Gain 0 too high, reduce by %f dB\n",
           openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0] - gain_range.stop());
-    int gain_diff = gain_range.stop() - (openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0]);
+    //int gain_diff = gain_range.stop() - (openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0]);
+    int gain_diff = (openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0]) - gain_range.stop(); //ALEX
     return gain_diff;
   }
 
@@ -1334,7 +1336,7 @@ extern "C" {
       case 7680000:
         s->usrp->set_master_clock_rate(30.72e6);
         //openair0_cfg[0].samples_per_packet    = 1024;
-        openair0_cfg[0].tx_sample_advance     = 80;
+        openair0_cfg[0].tx_sample_advance     = 190;
         openair0_cfg[0].tx_bw                 = 20e6;
         openair0_cfg[0].rx_bw                 = 20e6;
         break;
@@ -1409,7 +1411,8 @@ extern "C" {
                                       openair0_cfg[0].tune_offset);
       s->usrp->set_tx_freq(tx_tune_req, i+choffset);
       s->usrp->set_tx_gain(openair0_cfg[0].tx_gain[i],i+choffset); // [GONÇALO]
-      LOG_I(HW,"USRP TX_GAIN:%3.2lf gain_range:%3.2lf tx_gain:%3.2lf\n", gain_range_tx.stop()-openair0_cfg[0].tx_gain[i], gain_range_tx.stop(), openair0_cfg[0].tx_gain[i]);
+      //LOG_I(HW,"USRP TX_GAIN:%3.2lf gain_range:%3.2lf tx_gain:%3.2lf\n", gain_range_tx.stop()-openair0_cfg[0].tx_gain[i], gain_range_tx.stop(), openair0_cfg[0].tx_gain[i]);
+      LOG_I(HW,"USRP TX_GAIN:%3.2lf gain_range:%3.2lf tx_gain:%3.2lf\n", openair0_cfg[0].tx_gain[i], gain_range_tx.stop(), openair0_cfg[0].tx_gain[i]);
     }
   }
 
