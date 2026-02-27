@@ -1268,7 +1268,7 @@ extern "C" {
 
       case 7680000:
         //openair0_cfg[0].samples_per_packet    = 2048;
-        openair0_cfg[0].tx_sample_advance     = 50;
+        openair0_cfg[0].tx_sample_advance     = 55; //original = 50
         openair0_cfg[0].tx_bw                 = 160e6; //ALEX original 5e6
         openair0_cfg[0].rx_bw                 = 160e6; //ALEX original 5e6
         break;
