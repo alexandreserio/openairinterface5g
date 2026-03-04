@@ -33,3 +33,4 @@ nfapi_nr_interface_scf
 *.log
 *.out
 CMakeUserPresets.json
+start_oai
