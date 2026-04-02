@@ -1,7 +1,28 @@
 /*
- * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The OpenAirInterface Software Alliance licenses this file to You under
+ * the OAI Public License, Version 1.1  (the "License"); you may not use this file
+ * except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.openairinterface.org/?page_id=698
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *-------------------------------------------------------------------------------
+ * For more information about the OpenAirInterface (OAI) Software Alliance:
+ *      contact@openairinterface.org
  */
 
+/** usrp_lib.cpp
+ *
+ * \author: HongliangXU : hong-liang-xu@agilent.com
+ */
 #define _LARGEFILE_SOURCE
 #define _FILE_OFFSET_BITS 64
 #include <string.h>
@@ -532,7 +553,7 @@ static int trx_usrp_write(openair0_device_t *device,
       LOG_D(HW, "Signaling TX TS %llu\n", (unsigned long long)timestamp);
       pthread_cond_signal(&write_thread->cond_write);
       pthread_mutex_unlock(&write_thread->mutex_write);
-      return nsamps;
+      return 0;
     }
 }
 
@@ -609,7 +630,7 @@ void *trx_usrp_write_thread(void * arg)
     s->tx_md.start_of_burst = (s->tx_count==0) ? true : first_packet;
     s->tx_md.end_of_burst   = last_packet;
     s->tx_md.time_spec      = uhd::time_spec_t::from_ticks(timestamp, s->sample_rate);
-    LOG_D(PHY,"usrp_tx_write: tx_count %llu SoB %d, EoB %d, TS %llu\n",(unsigned long long)s->tx_count,s->tx_md.start_of_burst,s->tx_md.end_of_burst,(unsigned long long)timestamp); 
+    LOG_D(PHY,"usrp_tx_write: tx_count %llu SoB %d, EoB %d, TS %llu\n",(unsigned long long)s->tx_count,s->tx_md.start_of_burst,s->tx_md.end_of_burst,(unsigned long long)timestamp); //[ALEX] changed from D to W
     s->tx_count++;
 
     // bit 3 enables gpio (for backward compatibility)
@@ -858,14 +879,16 @@ int trx_usrp_set_gains(openair0_device_t *device,
 {
   usrp_state_t *s = (usrp_state_t *)device->priv;
   ::uhd::gain_range_t gain_range_tx = s->usrp->get_tx_gain_range(0);
-  s->usrp->set_tx_gain(gain_range_tx.stop()-openair0_cfg[0].tx_gain[0]);
+  //s->usrp->set_tx_gain(gain_range_tx.stop()-openair0_cfg[0].tx_gain[0]);
+  s->usrp->set_tx_gain(openair0_cfg[0].tx_gain[0]); //ALEX
   ::uhd::gain_range_t gain_range = s->usrp->get_rx_gain_range(0);
 
   // limit to maximum gain
   if (openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0] > gain_range.stop()) {
     LOG_E(HW,"RX Gain 0 too high, reduce by %f dB\n",
           openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0] - gain_range.stop());
-    int gain_diff = gain_range.stop() - (openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0]);
+    //int gain_diff = gain_range.stop() - (openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0]);
+    int gain_diff = (openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0]) - gain_range.stop(); //ALEX
     return gain_diff;
   }
 
@@ -1247,9 +1270,9 @@ extern "C" {
 
       case 7680000:
         //openair0_cfg[0].samples_per_packet    = 2048;
-        openair0_cfg[0].tx_sample_advance     = 50;
-        openair0_cfg[0].tx_bw                 = 5e6;
-        openair0_cfg[0].rx_bw                 = 5e6;
+        openair0_cfg[0].tx_sample_advance     = 55; //original = 50
+        openair0_cfg[0].tx_bw                 = 160e6; //ALEX original 5e6
+        openair0_cfg[0].rx_bw                 = 160e6; //ALEX original 5e6
         break;
 
       case 1920000:
@@ -1313,9 +1336,9 @@ extern "C" {
       case 7680000:
         s->usrp->set_master_clock_rate(30.72e6);
         //openair0_cfg[0].samples_per_packet    = 1024;
-        openair0_cfg[0].tx_sample_advance     = 80;
-        openair0_cfg[0].tx_bw                 = 20e6;
-        openair0_cfg[0].rx_bw                 = 20e6;
+        openair0_cfg[0].tx_sample_advance     = 93;
+        openair0_cfg[0].tx_bw                 = 5e6;
+        openair0_cfg[0].rx_bw                 = 5e6;
         break;
 
       case 1920000:
@@ -1352,6 +1375,12 @@ extern "C" {
       uhd::tune_request_t rx_tune_req(cfg->rx_freq[i], cfg->tune_offset);
       s->usrp->set_rx_freq(rx_tune_req, i+choffset);
       set_rx_gain_offset(cfg, i, bw_gain_adjust);
+
+      //Reset any rx_gain_offset [ADDED ALEX] //TESTED AND OK
+      for (int chain_index = 0; chain_index < 4; chain_index++){
+      	cfg->rx_gain_offset[chain_index] = 0.0;
+      }
+
       ::uhd::gain_range_t gain_range = s->usrp->get_rx_gain_range(i+choffset);
       // limit to maximum gain
       double gain = cfg->rx_gain[i] - cfg->rx_gain_offset[i];
@@ -1381,8 +1410,9 @@ extern "C" {
       uhd::tune_request_t tx_tune_req(openair0_cfg[0].tx_freq[i],
                                       openair0_cfg[0].tune_offset);
       s->usrp->set_tx_freq(tx_tune_req, i+choffset);
-      s->usrp->set_tx_gain(gain_range_tx.stop()-openair0_cfg[0].tx_gain[i],i+choffset);
-      LOG_I(HW,"USRP TX_GAIN:%3.2lf gain_range:%3.2lf tx_gain:%3.2lf\n", gain_range_tx.stop()-openair0_cfg[0].tx_gain[i], gain_range_tx.stop(), openair0_cfg[0].tx_gain[i]);
+      s->usrp->set_tx_gain(openair0_cfg[0].tx_gain[i],i+choffset); // [GONÇALO]
+      //LOG_I(HW,"USRP TX_GAIN:%3.2lf gain_range:%3.2lf tx_gain:%3.2lf\n", gain_range_tx.stop()-openair0_cfg[0].tx_gain[i], gain_range_tx.stop(), openair0_cfg[0].tx_gain[i]);
+      LOG_I(HW,"USRP TX_GAIN:%3.2lf gain_range:%3.2lf tx_gain:%3.2lf\n", openair0_cfg[0].tx_gain[i], gain_range_tx.stop(), openair0_cfg[0].tx_gain[i]);
     }
   }
 
@@ -1451,9 +1481,10 @@ extern "C" {
   }
 
   // display USRP settings
-  LOG_I(HW,"Actual master clock: %fMHz...\n",s->usrp->get_master_clock_rate()/1e6);
-  LOG_I(HW,"Actual clock source %s...\n",s->usrp->get_clock_source(0).c_str());
-  LOG_I(HW,"Actual time source %s...\n",s->usrp->get_time_source(0).c_str());
+  LOG_W(HW,"Actual master clock: %fMHz...\n",s->usrp->get_master_clock_rate()/1e6);
+  LOG_W(HW,"Actual clock source %s...\n",s->usrp->get_clock_source(0).c_str());
+  LOG_W(HW,"Actual time source %s...\n",s->usrp->get_time_source(0).c_str());
+  sleep(2); //ALEX
 
   // create tx & rx streamer
   uhd::stream_args_t stream_args_rx("sc16", "sc16");
@@ -1495,25 +1526,26 @@ extern "C" {
 
   for (int i=0; i<openair0_cfg[0].rx_num_channels; i++) {
     LOG_I(HW,"RX Channel %d\n",i);
-    LOG_I(HW,"  Actual RX sample rate: %fMSps...\n",s->usrp->get_rx_rate(i+choffset)/1e6);
-    LOG_I(HW,"  Actual RX frequency: %fGHz...\n", s->usrp->get_rx_freq(i+choffset)/1e9);
-    LOG_I(HW,"  Actual RX gain: %f...\n", s->usrp->get_rx_gain(i+choffset));
+    LOG_W(HW,"  Actual RX sample rate: %fMSps...\n",s->usrp->get_rx_rate(i+choffset)/1e6);
+    LOG_W(HW,"  Actual RX frequency: %fGHz...\n", s->usrp->get_rx_freq(i+choffset)/1e9);
+    LOG_W(HW,"  Actual RX gain: %f...\n", s->usrp->get_rx_gain(i+choffset));
     LOG_I(HW,"  Actual RX bandwidth: %fM...\n", s->usrp->get_rx_bandwidth(i+choffset)/1e6);
     LOG_I(HW,"  Actual RX antenna: %s...\n", s->usrp->get_rx_antenna(i+choffset).c_str());
   }
 
   for (int i=0; i<openair0_cfg[0].tx_num_channels; i++) {
     LOG_I(HW,"TX Channel %d\n",i);
-    LOG_I(HW,"  Actual TX sample rate: %fMSps...\n", s->usrp->get_tx_rate(i+choffset)/1e6);
-    LOG_I(HW,"  Actual TX frequency: %fGHz...\n", s->usrp->get_tx_freq(i+choffset)/1e9);
-    LOG_I(HW,"  Actual TX gain: %f...\n", s->usrp->get_tx_gain(i+choffset));
+    LOG_W(HW,"  Actual TX sample rate: %fMSps...\n", s->usrp->get_tx_rate(i+choffset)/1e6);
+    LOG_W(HW,"  Actual TX frequency: %fGHz...\n", s->usrp->get_tx_freq(i+choffset)/1e9);
+    LOG_W(HW,"  Actual TX gain: %f...\n", s->usrp->get_tx_gain(i+choffset));
     LOG_I(HW,"  Actual TX bandwidth: %fM...\n", s->usrp->get_tx_bandwidth(i+choffset)/1e6);
     LOG_I(HW,"  Actual TX antenna: %s...\n", s->usrp->get_tx_antenna(i+choffset).c_str());
-    LOG_I(HW,"  Actual TX packet size: %lu\n",s->tx_stream->get_max_num_samps());
+    LOG_W(HW,"  Actual TX packet size: %lu\n",s->tx_stream->get_max_num_samps());
   }
+  sleep(3); //ALEX
 
   std::cout << boost::format("Using Device: %s") % s->usrp->get_pp_string() << std::endl;
-  LOG_I(HW,"Device timestamp: %f...\n", s->usrp->get_time_now().get_real_secs());
+  LOG_W(HW,"Device timestamp: %f...\n", s->usrp->get_time_now().get_real_secs()); //[ALEX] Changed from I to W
   device->trx_write_func = trx_usrp_write;
   device->trx_read_func  = trx_usrp_read;
   s->sample_rate = openair0_cfg[0].sample_rate;
