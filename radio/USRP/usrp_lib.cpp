@@ -1,28 +1,7 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/** usrp_lib.cpp
- *
- * \author: HongliangXU : hong-liang-xu@agilent.com
- */
 #define _LARGEFILE_SOURCE
 #define _FILE_OFFSET_BITS 64
 #include <string.h>
@@ -553,7 +532,7 @@ static int trx_usrp_write(openair0_device_t *device,
       LOG_D(HW, "Signaling TX TS %llu\n", (unsigned long long)timestamp);
       pthread_cond_signal(&write_thread->cond_write);
       pthread_mutex_unlock(&write_thread->mutex_write);
-      return 0;
+      return nsamps;
     }
 }
 
@@ -630,7 +609,7 @@ void *trx_usrp_write_thread(void * arg)
     s->tx_md.start_of_burst = (s->tx_count==0) ? true : first_packet;
     s->tx_md.end_of_burst   = last_packet;
     s->tx_md.time_spec      = uhd::time_spec_t::from_ticks(timestamp, s->sample_rate);
-    LOG_D(PHY,"usrp_tx_write: tx_count %llu SoB %d, EoB %d, TS %llu\n",(unsigned long long)s->tx_count,s->tx_md.start_of_burst,s->tx_md.end_of_burst,(unsigned long long)timestamp); //[ALEX] changed from D to W
+    LOG_D(PHY,"usrp_tx_write: tx_count %llu SoB %d, EoB %d, TS %llu\n",(unsigned long long)s->tx_count,s->tx_md.start_of_burst,s->tx_md.end_of_burst,(unsigned long long)timestamp); 
     s->tx_count++;
 
     // bit 3 enables gpio (for backward compatibility)

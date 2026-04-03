@@ -1120,16 +1120,19 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
       pusch_vars->ulsch_power_tot += pusch_vars->ulsch_power[aarx];
       pusch_vars->ulsch_noise_power_tot += pusch_vars->ulsch_noise_power[aarx];
     }
+    static uint32_t log_cntr = 0; //ALEX
     if (dB_fixed_x10(pusch_vars->ulsch_power_tot) < dB_fixed_x10(pusch_vars->ulsch_noise_power_tot) + gNB->pusch_thres) {
       NR_gNB_PHY_STATS_t *stats = get_phy_stats(gNB, ulsch->rnti);
-
-      LOG_D(PHY,
+      
+      if(log_cntr % 4 == 0){ //ALEX
+        LOG_W(PHY,
             "PUSCH not detected in %d.%d (%d,%d,%d)\n",
             frame_rx,
             slot_rx,
             dB_fixed_x10(pusch_vars->ulsch_power_tot),
             dB_fixed_x10(pusch_vars->ulsch_noise_power_tot),
             gNB->pusch_thres);
+      }
       pusch_vars->ulsch_power_tot = pusch_vars->ulsch_noise_power_tot;
       pusch_vars->DTX = 1;
       if (stats)
@@ -1145,14 +1148,16 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
         continue;
       }
     } else {
-      LOG_D(PHY,
+      if(log_cntr % 4 == 0){ //ALEX
+        LOG_W(PHY,
             "PUSCH detected in %d.%d (%d,%d,%d)\n",
             frame_rx,
             slot_rx,
             dB_fixed_x10(pusch_vars->ulsch_power_tot),
             dB_fixed_x10(pusch_vars->ulsch_noise_power_tot),
             gNB->pusch_thres);
-
+      }
+      log_cntr++; //ALEX
       pusch_vars->DTX = 0;
     }
     ulsch_to_decode[ULSCH_id] = true;

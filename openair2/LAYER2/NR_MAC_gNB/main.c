@@ -105,6 +105,12 @@ static char *st_append(char *start, const char *end, const char *format, ...)
 
 size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset_rsrp)
 {
+  FILE* file; //ADDED ALEX
+  file = fopen("gnb_measurements.md", "a"); //ADDED ALEX
+  if(file == NULL){ //ADDED ALEX
+    LOG_E(UTIL, "fopen() failed\n");
+  }
+
   const char *begin = output;
   const char *end = output + strlen;
 
@@ -130,17 +136,18 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     output = st_append(output,
                        end,
                        " %s PH %d dB PCMAX %d dBm",
-                       in_sync ? "in-sync" : "out-of-sync",
+                       in_sync ? "\e[1;32m in-sync \e[0m" : "\e[1;31m out-of-sync \e[0m",
                        sched_ctrl->ph,
                        sched_ctrl->pcmax);
 
     if (stats->num_rsrp_meas)
-      output = st_append(output, end, ", average RSRP %d (%d meas)", avg_rsrp, stats->num_rsrp_meas);
+      output = st_append(output, end, ",\e[0;36m average RSRP \e[1;36m%d\e[0;36m (%d meas)\e[0m", avg_rsrp, stats->num_rsrp_meas);
 
     if (stats->num_sinr_meas) {
       output = st_append(output,
                          end,
                          ", average SINR %d.%d (%d meas)",
+                         ",\e[0;36m average SINR \e[1;36m%d.%d\e[0;36m (%d meas)\e[0m",
                          avg_sinrx10 / 10,
                          avg_sinrx10 % 10,
                          stats->num_sinr_meas);
@@ -173,7 +180,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     float pucch_snr_diff = (pucch_snr * 10.0f - sched_ctrl->pucch_pc.target_snrx10) / 10.0f;
     output = st_append(output,
                        end,
-                       ", dlsch_errors %"PRIu64", pucch0_DTX %d (SNR %.1f%+.1f dB), BLER %.5f MCS (%d) %d CCE fail %d\n",
+                       ", dlsch_errors %"PRIu64", pucch0_DTX %d (\e[0;36mSNR\e[1;36m %.1f%+.1f dB\e[0m), \e[0;36mBLER\e[1;36m %.5f\e[0m MCS (%d) %d CCE fail %d\n",
                        stats->dl.errors,
                        stats->pucch0_DTX,
                        pucch_snr,
@@ -182,6 +189,9 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                        UE->current_DL_BWP.mcsTableIdx,
                        sched_ctrl->dl_bler_stats.mcs,
                        sched_ctrl->dl_cce_fail);
+
+    fprintf(file, "dlsch_errors %"PRIu64" | SNR %.1f%+.1f (dB) | avg_RSRP %d (meas %d) | DL_BLER %.5f\n", stats->dl.errors, pucch_snr, pucch_snr_diff, avg_rsrp, stats->num_rsrp_meas, sched_ctrl->dl_bler_stats.bler); //ADDED ALEX
+
     if (reset_rsrp) {
       stats->num_rsrp_meas = 0;
       stats->cumul_rsrp = 0;
@@ -199,7 +209,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     float diff_target = (snr * 10.0f - sched_ctrl->pusch_pc.target_snrx10) / 10.0f;
     output = st_append(output,
                        end,
-                       ", ulsch_errors %"PRIu64", ulsch_DTX %d, BLER %.5f MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d SNR %.1f (%+.1f) dB CCE fail %d\n",
+                       ", ulsch_errors %"PRIu64", ulsch_DTX %d, \e[0;36mBLER\e[1;36m %.5f\e[0m MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d \e[0;36mSNR\e[1;36m %.1f (%+.1f)\e[0;36m dB\e[0m CCE fail %d\n",
                        stats->ul.errors,
                        stats->ulsch_DTX,
                        sched_ctrl->ul_bler_stats.bler,
@@ -211,6 +221,9 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                        snr,
                        diff_target,
                        sched_ctrl->ul_cce_fail);
+
+    fprintf(file, "UL_BLER %.5f SNR %d.%d \n", sched_ctrl->dl_bler_stats.bler, sched_ctrl->pusch_snrx10/10, sched_ctrl->pusch_snrx10%10); //ADDED ALEX
+
    output = st_append(output,
                        end,
                        "UE %04x: MAC:    TX %14"PRIu64" RX %14"PRIu64" bytes\n",
@@ -228,6 +241,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     }
   }
   DevAssert(output <= end);
+  fclose(file); //ADDED ALEX
   return output - begin;
 }
 
