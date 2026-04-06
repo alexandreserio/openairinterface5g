@@ -180,7 +180,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     float pucch_snr_diff = (pucch_snr * 10.0f - sched_ctrl->pucch_pc.target_snrx10) / 10.0f;
     output = st_append(output,
                        end,
-                       ", dlsch_errors %"PRIu64", pucch0_DTX %d (\e[0;36mSNR\e[1;36m %.1f%+.1f dB\e[0m), \e[0;36mBLER\e[1;36m %.5f\e[0m MCS (%d) %d CCE fail %d\n",
+                       ", dlsch_errors %"PRIu64", pucch0_DTX %d (\e[0;36mSNR\e[1;36m %.1f dB (%+.1f)\e[0m), \e[0;36mBLER\e[1;36m %.5f\e[0m MCS (%d) %d CCE fail %d\n",
                        stats->dl.errors,
                        stats->pucch0_DTX,
                        pucch_snr,
@@ -190,7 +190,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                        sched_ctrl->dl_bler_stats.mcs,
                        sched_ctrl->dl_cce_fail);
 
-    fprintf(file, "dlsch_errors %"PRIu64" | SNR %.1f%+.1f (dB) | avg_RSRP %d (meas %d) | DL_BLER %.5f\n", stats->dl.errors, pucch_snr, pucch_snr_diff, avg_rsrp, stats->num_rsrp_meas, sched_ctrl->dl_bler_stats.bler); //ADDED ALEX
+    fprintf(file, "dlsch_errors %"PRIu64" | SNR %.1f dB (%+.1f) | avg_RSRP %d (meas %d) | DL_BLER %.5f\n", stats->dl.errors, pucch_snr, pucch_snr_diff, avg_rsrp, stats->num_rsrp_meas, sched_ctrl->dl_bler_stats.bler); //ADDED ALEX
 
     if (reset_rsrp) {
       stats->num_rsrp_meas = 0;
@@ -209,7 +209,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     float diff_target = (snr * 10.0f - sched_ctrl->pusch_pc.target_snrx10) / 10.0f;
     output = st_append(output,
                        end,
-                       ", ulsch_errors %"PRIu64", ulsch_DTX %d, \e[0;36mBLER\e[1;36m %.5f\e[0m MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d \e[0;36mSNR\e[1;36m %.1f (%+.1f)\e[0;36m dB\e[0m CCE fail %d\n",
+                       ", ulsch_errors %"PRIu64", ulsch_DTX %d, \e[0;36mBLER\e[1;36m %.5f\e[0m MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d \e[0;36mSNR\e[1;36m %.1f dB (%+.1f)\e[0m CCE fail %d\n",
                        stats->ul.errors,
                        stats->ulsch_DTX,
                        sched_ctrl->ul_bler_stats.bler,
@@ -222,7 +222,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                        diff_target,
                        sched_ctrl->ul_cce_fail);
 
-    fprintf(file, "UL_BLER %.5f SNR %d.%d \n", sched_ctrl->dl_bler_stats.bler, sched_ctrl->pusch_snrx10/10, sched_ctrl->pusch_snrx10%10); //ADDED ALEX
+    fprintf(file, "UL_BLER %.5f SNR %d.%d \n", sched_ctrl->dl_bler_stats.bler, snr, diff_target); //ADDED ALEX
 
    output = st_append(output,
                        end,
