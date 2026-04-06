@@ -211,13 +211,13 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
   int SNRtimes10 = dB_fixed_x10(signal_pwr) - dB_fixed_x10(ue->measurements.n0_power_avg);
   ue->measurements.ssb_sinr_dB[ssb_index] = SNRtimes10 / 10.0;
 
-  LOG_D(PHY,
+  LOG_W(PHY,
         "[UE %d] ssb %d SS-RSRP: %d dBm/RE (%f dB/RE), SS-SINR: %f dB\n",
         ue->Mod_id,
         ssb_index,
         ue->measurements.ssb_rsrp_dBm[ssb_index],
         rsrp_db_per_re,
-        ue->measurements.ssb_sinr_dB[ssb_index]);
+        ue->measurements.ssb_sinr_dB[ssb_index]); //ALEX D to W
 
   // Send SS measurements to MAC
   send_ssb_rsrp_meas(ue,

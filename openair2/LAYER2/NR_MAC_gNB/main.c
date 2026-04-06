@@ -222,7 +222,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                        diff_target,
                        sched_ctrl->ul_cce_fail);
 
-    fprintf(file, "UL_BLER %.5f SNR %d.%d \n", sched_ctrl->dl_bler_stats.bler, snr, diff_target); //ADDED ALEX
+    fprintf(file, "UL_BLER %.5f SNR %.1f dB (%+.1f)\n", sched_ctrl->dl_bler_stats.bler, snr, diff_target); //ADDED ALEX
 
    output = st_append(output,
                        end,
