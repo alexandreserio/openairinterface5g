@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file nr_transport_proto_ue.h
+/*!
  * \brief Function prototypes for PHY physical/transport channel processing and generation V8.6 2009-03
- * \author R. Knopp, F. Kaltenberger
- * \date 2011
- * \version 0.1
- * \company Eurecom
- * \email: knopp@eurecom.fr
- * \note
- * \warning
  */
 #ifndef __NR_TRANSPORT_PROTO_UE__H__
 #define __NR_TRANSPORT_PROTO_UE__H__
@@ -69,11 +45,9 @@ typedef struct pdsch_scope_req_s {
 void nr_ue_dlsch_init(NR_UE_DLSCH_t *dlsch_list, int num_dlsch, uint8_t max_ldpc_iterations);
 void nr_conjch0_mult_ch1(c16_t *ch0, c16_t *ch1, c16_t *ch0conj_ch1, unsigned short nb_rb, unsigned char output_shift0);
 
-void set_first_last_pdcch_symb(const NR_UE_PDCCH_CONFIG *phy_pdcch_config, int *first_symb, int *last_symb);
+void set_first_last_pdcch_symb(const NR_UE_PDCCH_CONFIG *phy_pdcch_config, int symb_slot, int *first_symb, int *last_symb);
 
-int get_pdcch_mon_occasions_slot(const fapi_nr_dl_config_dci_dl_pdu_rel15_t *ss, uint8_t start_symb[NR_SYMBOLS_PER_SLOT]);
-
-int get_max_pdcch_monOcc(const NR_UE_PDCCH_CONFIG *phy_pdcch_config);
+int get_max_pdcch_monOcc(const NR_UE_PDCCH_CONFIG *phy_pdcch_config, int nb_symb_slot);
 
 /** \brief This is the alternative top-level entry point for DLSCH decoding in UE.
     It handles all the HARQ processes in only one call. The routine first
@@ -126,8 +100,7 @@ int nr_ulsch_encoding(PHY_VARS_NR_UE *ue,
                       const uint8_t slot,
                       unsigned int *G,
                       int nb_ulsch,
-                      uint8_t *ULSCH_ids,
-                      uint16_t number_dmrs_symbols);
+                      uint8_t *ULSCH_ids);
 
 /*! \brief Perform PUSCH scrambling. TS 38.211 V15.4.0 subclause 6.3.1.1
   @param[in] in Pointer to input bits
@@ -163,25 +136,25 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
                             const uint8_t slot,
                             nr_phy_data_tx_t *phy_data,
                             c16_t **txdataF,
-                            bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT]);
+                            bool was_symbol_used[NR_SYMBOLS_PER_SLOT]);
 
 /** \brief This function does IFFT for PUSCH
 */
 
-uint8_t nr_tx_rotation_and_ofdm_mod(const uint8_t slot,
-                                    const NR_DL_FRAME_PARMS *frame_parms,
-                                    const uint8_t n_antenna_ports,
-                                    c16_t **txdataF,
-                                    c16_t **txdata,
-                                    uint32_t linktype,
-                                    bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT],
-                                    bool no_phase_pre_comp);
+void nr_tx_rotation_and_ofdm_mod(const uint8_t slot,
+                                 const NR_DL_FRAME_PARMS *frame_parms,
+                                 const uint8_t n_antenna_ports,
+                                 c16_t **txdataF,
+                                 c16_t **txdata,
+                                 uint32_t linktype,
+                                 bool was_symbol_used[NR_SYMBOLS_PER_SLOT],
+                                 bool no_phase_pre_comp);
 
 bool ue_srs_procedures_nr(PHY_VARS_NR_UE *ue,
                                  const UE_nr_rxtx_proc_t *proc,
                                  c16_t **txdataF,
                                  nr_phy_data_tx_t *phy_data,
-                                 bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT]);
+                                 bool was_symbol_used[NR_SYMBOLS_PER_SLOT]);
 
 void clean_UE_harq(PHY_VARS_NR_UE *UE);
 
@@ -242,7 +215,6 @@ double nr_ue_pbch_freq_offset(const NR_DL_FRAME_PARMS *frame_parms,
 nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
                                   PHY_VARS_NR_UE *phy_vars_ue,
                                   int n_frames,
-                                  int sa,
                                   nr_gscn_info_t gscnInfo[MAX_GSCN_BAND],
                                   int numGscn);
 
@@ -313,16 +285,16 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
                 unsigned char harq_pid,
                 uint32_t pdsch_est_size,
                 int32_t dl_ch_estimates[][pdsch_est_size],
-                int layer_llr_size,
-                int16_t layer_llr[][layer_llr_size],
                 int16_t *llr[2],
                 uint32_t dl_valid_re[NR_SYMBOLS_PER_SLOT],
                 c16_t rxdataF[][ue->frame_parms.samples_per_slot_wCP],
-                uint32_t llr_offset[NR_SYMBOLS_PER_SLOT],
                 int32_t *log2_maxh,
                 int rx_size_symbol,
                 int nbRx,
-                int32_t rxdataF_comp[][nbRx][rx_size_symbol * NR_SYMBOLS_PER_SLOT],
+                c16_t rxdataF_comp[][dlsch->Nl][nbRx][rx_size_symbol],
+                c16_t dl_ch_mag[][dlsch->Nl][nbRx][rx_size_symbol],
+                c16_t dl_ch_magb[][dlsch->Nl][nbRx][rx_size_symbol],
+                c16_t dl_ch_magr[][dlsch->Nl][nbRx][rx_size_symbol],
                 c16_t ptrs_phase_per_slot[][NR_SYMBOLS_PER_SLOT],
                 int32_t ptrs_re_per_slot[][NR_SYMBOLS_PER_SLOT],
                 int G,
@@ -331,7 +303,7 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
 
 int32_t generate_nr_prach(PHY_VARS_NR_UE *ue, uint8_t gNB_id, int frame, uint8_t slot, c16_t **txData);
 void apply_ntn_config(PHY_VARS_NR_UE *UE,
-                      NR_DL_FRAME_PARMS *fp,
+                      const NR_DL_FRAME_PARMS *fp,
                       int hfn_rx,
                       int frame_rx,
                       int slot_rx,

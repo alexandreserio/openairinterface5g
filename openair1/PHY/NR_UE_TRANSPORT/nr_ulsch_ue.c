@@ -1,45 +1,20 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file nr_ulsch_ue.c
+/*!
  * \brief Top-level routines for transmission of the PUSCH TS 38.211 v 15.4.0
- * \author Khalid Ahmed
- * \date 2019
- * \version 0.1
- * \company Fraunhofer IIS
- * \email: khalid.ahmed@iis.fraunhofer.de
- * \note
- * \warning
  */
 #include <stdint.h>
 #include "PHY/NR_REFSIG/dmrs_nr.h"
 #include "PHY/NR_REFSIG/ptrs_nr.h"
-#include "PHY/NR_REFSIG/refsig_defs_ue.h"
+#include "PHY/NR_REFSIG/nr_refsig.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_ue.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
 #include "PHY/MODULATION/nr_modulation.h"
 #include "PHY/MODULATION/modulation_common.h"
 #include "common/utils/assertions.h"
 #include "common/utils/nr/nr_common.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 #include "PHY/NR_TRANSPORT/nr_transport_common_proto.h"
 #include "PHY/NR_TRANSPORT/nr_sch_dmrs.h"
 #include "PHY/defs_nr_common.h"
@@ -436,8 +411,7 @@ static void map_current_symbol(const nr_phy_pxsch_params_t p,
 /*
 TS 38.211 table 6.4.1.1.3-1 and 2
 */
-static void dmrs_amp_mult(const uint32_t dmrs_port,
-                          const int Wt,
+static void dmrs_amp_mult(const int Wt,
                           const int Wf[2],
                           const c16_t *mod_dmrs,
                           c16_t *mod_dmrs_out,
@@ -494,9 +468,9 @@ static void map_symbols(const nr_phy_pxsch_params_t p,
       c16_t mod_dmrs[ALNARS_16_4(n_dmrs)] __attribute((aligned(16)));
       if (p.transform_precoding == transformPrecoder_disabled) {
         nr_modulation(gold, n_dmrs * 2, DMRS_MOD_ORDER, (int16_t *)mod_dmrs);
-        dmrs_amp_mult(p.dmrs_port, p.Wt, p.Wf, mod_dmrs, mod_dmrs_amp, n_dmrs, p.dmrs_type, p.num_cdm_no_data);
+        dmrs_amp_mult(p.Wt, p.Wf, mod_dmrs, mod_dmrs_amp, n_dmrs, p.dmrs_type, p.num_cdm_no_data);
       } else {
-        dmrs_amp_mult(p.dmrs_port, p.Wt, p.Wf, dmrs_seq, mod_dmrs_amp, n_dmrs, p.dmrs_type, p.num_cdm_no_data);
+        dmrs_amp_mult(p.Wt, p.Wf, dmrs_seq, mod_dmrs_amp, n_dmrs, p.dmrs_type, p.num_cdm_no_data);
       }
     } else if ((p.pdu_bit_map & PUSCH_PDU_BITMAP_PUSCH_PTRS) && ptrs_symbol) {
       AssertFatal(p.transform_precoding == transformPrecoder_disabled, "PTRS NOT SUPPORTED IF TRANSFORM PRECODING IS ENABLED\n");
@@ -1029,11 +1003,11 @@ static uci_on_pusch_bit_type_t *nr_data_control_mapping(const nfapi_nr_ue_pusch_
   if (!pusch_pdu || !codeword || codeword_len == 0 || !template)
     return NULL;
   const uint8_t n_symbols = pusch_pdu->nr_of_symbols;
-  if (n_symbols == 0 || n_symbols > NR_NUMBER_OF_SYMBOLS_PER_SLOT)
+  if (n_symbols == 0 || n_symbols > NR_SYMBOLS_PER_SLOT)
     return NULL;
 
-  uint32_t m_ulsch_initial[NR_NUMBER_OF_SYMBOLS_PER_SLOT] = {0};
-  uint32_t m_uci_current[NR_NUMBER_OF_SYMBOLS_PER_SLOT] = {0}; // This holds RE counts, not bit counts
+  uint32_t m_ulsch_initial[NR_SYMBOLS_PER_SLOT] = {0};
+  uint32_t m_uci_current[NR_SYMBOLS_PER_SLOT] = {0}; // This holds RE counts, not bit counts
 
   if (initialize_mapping_resources(pusch_pdu, m_ulsch_initial, m_uci_current) != 0) {
     LOG_E(PHY, "Failed to initialize mapping resources\n");
@@ -1050,8 +1024,8 @@ static uci_on_pusch_bit_type_t *nr_data_control_mapping(const nfapi_nr_ue_pusch_
 
   memset(template, 0, codeword_len * sizeof(uci_on_pusch_bit_type_t));
 
-  uint32_t positions_by_sym[NR_NUMBER_OF_SYMBOLS_PER_SLOT][MAX_UCI_CODED_BITS] = {0};
-  uint32_t count_by_sym[NR_NUMBER_OF_SYMBOLS_PER_SLOT] = {0};
+  uint32_t positions_by_sym[NR_SYMBOLS_PER_SLOT][MAX_UCI_CODED_BITS] = {0};
+  uint32_t count_by_sym[NR_SYMBOLS_PER_SLOT] = {0};
 
   struct map_uci_common_arg map_arg = {.template = template,
                                        .n_symbols = pusch_pdu->nr_of_symbols,
@@ -1096,7 +1070,7 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
                             const uint8_t slot,
                             nr_phy_data_tx_t *phy_data,
                             c16_t **txdataF,
-                            bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT])
+                            bool was_symbol_used[NR_SYMBOLS_PER_SLOT])
 {
 
   int harq_pid = phy_data->ulsch.pusch_pdu.pusch_data.harq_process_id;
@@ -1191,7 +1165,7 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
     rm_info = calc_rate_match_info_uci(pusch_pdu, harq_process_ul_ue, nl_qm, &G[pusch_id]);
   }
 
-  if (nr_ulsch_encoding(UE, &phy_data->ulsch, frame, slot, G, 1, ULSCH_ids, number_dmrs_symbols) == -1) {
+  if (nr_ulsch_encoding(UE, &phy_data->ulsch, frame, slot, G, 1, ULSCH_ids) == -1) {
     stop_meas_nr_ue_phy(UE, PUSCH_PROC_STATS);
     return;
   }
@@ -1605,30 +1579,37 @@ void nr_ue_ulsch_procedures(PHY_VARS_NR_UE *UE,
   stop_meas_nr_ue_phy(UE, PUSCH_PROC_STATS);
 }
 
-uint8_t nr_tx_rotation_and_ofdm_mod(const uint8_t slot,
-                                    const NR_DL_FRAME_PARMS *frame_parms,
-                                    const uint8_t n_antenna_ports,
-                                    c16_t **txdataF,
-                                    c16_t **txdata,
-                                    uint32_t linktype,
-                                    bool was_symbol_used[NR_NUMBER_OF_SYMBOLS_PER_SLOT],
-                                    bool no_phase_pre_comp)
+void nr_tx_rotation_and_ofdm_mod(const uint8_t slot,
+                                 const NR_DL_FRAME_PARMS *frame_parms,
+                                 const uint8_t n_antenna_ports,
+                                 c16_t **txdataF,
+                                 c16_t **txdata,
+                                 uint32_t linktype,
+                                 bool was_symbol_used[NR_SYMBOLS_PER_SLOT],
+                                 bool no_phase_pre_comp)
 {
   int N_RB = (linktype == link_type_sl) ? frame_parms->N_RB_SL : frame_parms->N_RB_UL;
 
   if (!no_phase_pre_comp) {
-    for (int i = 0; i < NR_NUMBER_OF_SYMBOLS_PER_SLOT; i++) {
+    for (int i = 0; i < frame_parms->symbols_per_slot; i++) {
       if (was_symbol_used[i] == false)
         continue;
       for (int ap = 0; ap < n_antenna_ports; ap++) {
-        apply_nr_rotation_TX(frame_parms, txdataF[ap], frame_parms->symbol_rotation[linktype], slot, N_RB, i, 1);
+        apply_nr_rotation_TX(frame_parms,
+                             txdataF[ap],
+                             false,
+                             frame_parms->symbol_rotation[linktype],
+                             slot,
+                             N_RB,
+                             i,
+                             1);
       }
     }
   }
 
   for (int ap = 0; ap < n_antenna_ports; ap++) {
     if (frame_parms->Ncp == 1) { // extended cyclic prefix
-      for (int i = 0; i < NR_NUMBER_OF_SYMBOLS_PER_SLOT_EXTENDED_CP; i++) {
+      for (int i = 0; i < frame_parms->symbols_per_slot; i++) {
         if (was_symbol_used[i] == false) {
           memset(&txdata[ap][(frame_parms->ofdm_symbol_size + frame_parms->nb_prefix_samples) * i],
                  0,
@@ -1643,11 +1624,7 @@ uint8_t nr_tx_rotation_and_ofdm_mod(const uint8_t slot,
                      CYCLIC_PREFIX);
       }
     } else { // normal cyclic prefix
-      nr_normal_prefix_mod(txdataF[ap], txdata[ap], NR_NUMBER_OF_SYMBOLS_PER_SLOT, frame_parms, slot, was_symbol_used);
+      nr_normal_prefix_mod(txdataF[ap], txdata[ap], frame_parms->symbols_per_slot, frame_parms, slot, was_symbol_used);
     }
   }
-
-  ///////////
-  ////////////////////////////////////////////////////
-  return 0;
 }

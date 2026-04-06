@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # Running OAI 5G Softmodems
 
 This document explains some options for running 5G executables.
@@ -464,7 +466,10 @@ sudo ./ran_build/build/nr-uesoftmodem -O ../targets/PROJECTS/GENERIC-NR-5GC/CONF
 The OAI UE can also be used in front of a OAI gNB without the support of eNB or EPC and circumventing random access. In this case both gNB and eNB need to be run with the `--phy-test` flag. At the gNB this flag does the following
  - it reads the RRC configuration from the configuration file
  - it encodes the RRCConfiguration and the RBconfig message and stores them in the binary files `rbconfig.raw` and `reconfig.raw` in the current directory
- - the MAC uses a pre-configured allocation of PDSCH and PUSCH with randomly generated payload instead of the standard scheduler. The options `-m`, `-l`, `-t`, `-M`, `-T`, `-D`, and `-U` can be used to configure this scheduler. See `./nr-softmodem -h` for more information.
+ - the MAC uses a pre-configured allocation of PDSCH and PUSCH with randomly generated payload instead of the standard scheduler. The options `-m`, `-l`, `-t`, `-M`, `-T`, `-D`, and `-U` can be used to configure this scheduler.
+ - Options `-Dmod`, and `-Umod` were introduced to enable scheduling PDSCH/PUSCH on slots >= 64 in phy-test mode. (in case of >= 120Khz subcarrier spacing and FDD)
+ - For ex: `-Dmod 2' / '-Umod 2` allocates every 2nd slot for PDSCH or PUSCH respectively.
+ - See `./nr-softmodem -h` for more information.
 
 At the UE, the `--phy-test` flag will read the binary files `rbconfig.raw` and `reconfig.raw` from the current directory and process them. If you wish to provide a different path for these files, please use the options `--reconfig-file` and `--rbconfig-file`.
 
@@ -544,7 +549,7 @@ sudo ./nr-uesoftmodem --do-ra
 
 #### Run OAI with SDAP & Custom DRBs
 
-To run OAI gNB with SDAP, simply include `--gNBs.[0].enable_sdap 1` to the binary's arguments.
+SDAP is enabled by default. To disable SDAP, include `--gNBs.[0].enable_sdap 0` to the binary's arguments.
 
 The DRB creation is dependent on the 5QI. 
 If the 5QI corresponds to a GBR Flow it assigns a dedicated data radio bearer.

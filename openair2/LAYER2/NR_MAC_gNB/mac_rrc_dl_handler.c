@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "mac_rrc_dl_handler.h"
@@ -560,19 +543,20 @@ static NR_UE_info_t *create_new_UE(gNB_MAC_INST *mac, uint32_t cu_id, const NR_C
   bool success = du_add_f1_ue_data(rnti, &new_ue_data);
   DevAssert(success);
 
-  NR_UE_info_t *UE = get_new_nr_ue_inst(&mac->UE_info.uid_allocator, rnti, NULL);
+  NR_UE_info_t *UE = get_new_nr_ue_inst(&mac->UE_info.uid_allocator, rnti, NULL, &mac->radio_config);
   AssertFatal(UE->uid < MAX_MOBILES_PER_GNB, "cannot create UE context, UE context setup failure not implemented\n");
 
   NR_CellGroupConfig_t *cellGroupConfig = NULL;
   NR_COMMON_channels_t *cc = &mac->common_channels[CC_id];
   const NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
   const nr_mac_config_t *configuration = &mac->radio_config;
+  int ssb_index = get_ssbidx_from_beam(mac, UE->UE_beam_index);
   if (is_SA) {
-    cellGroupConfig = get_initial_cellGroupConfig(UE->uid, scc, &mac->radio_config, &mac->rlc_config);
+    cellGroupConfig = get_initial_cellGroupConfig(UE->uid, scc, &mac->radio_config, &mac->rlc_config, ssb_index);
     cellGroupConfig->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(UE->rnti, UE->uid, scc, mac->frame);
   } else {
     NR_UE_NR_Capability_t *cap = get_ue_nr_cap_from_cg_config_info(cgci);
-    cellGroupConfig = get_default_secondaryCellGroup(scc, cap, 1, 1, configuration, UE->uid);
+    cellGroupConfig = get_default_secondaryCellGroup(scc, cap, 1, 1, configuration, UE->uid, ssb_index);
     cellGroupConfig->spCellConfig->reconfigurationWithSync = get_reconfiguration_with_sync(UE->rnti, UE->uid, scc, mac->frame);
     // TODO: in NSA we assign capabilities here, otherwise outside => not logic
     UE->capability = cap;
@@ -663,8 +647,12 @@ static NR_CellGroupConfig_t *get_cellgroup_config(NR_UE_info_t *UE)
 static void update_cellgroup_for_reestablishment(NR_UE_info_t *UE, NR_CellGroupConfig_t *new_CellGroup)
 {
   DevAssert(new_CellGroup);
-  DevAssert(new_CellGroup->spCellConfig);
   DevAssert(UE->reestablish_rlc);
+  if (!new_CellGroup->spCellConfig) {
+    LOG_E(NR_MAC, "UE %04x: CellGroupConfig has no spCellConfig during reestablishment "
+          "(possible double reestablishment race), skipping reestablishRLC update\n", UE->rnti);
+    return;
+  }
   LOG_I(NR_MAC, "UE %04x: Re-establishment detected, setting reestablishRLC flags\n", UE->rnti);
   struct NR_CellGroupConfig__rlc_BearerToAddModList *addmod = new_CellGroup->rlc_BearerToAddModList;
   if (addmod && addmod->list.count > 0) {
@@ -1079,6 +1067,10 @@ void dl_rrc_message_transfer(const f1ap_dl_rrc_message_t *dl_rrc)
       ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->CellGroup);
       UE->CellGroup = oldUE->CellGroup;
       oldUE->CellGroup = NULL;
+      ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->reconfigCellGroup);
+      UE->reconfigCellGroup = oldUE->reconfigCellGroup;
+      oldUE->reconfigCellGroup = NULL;
+      UE->reestablish_rlc = oldUE->reestablish_rlc;
       ASN_STRUCT_FREE(asn_DEF_NR_UE_NR_Capability, UE->capability);
       UE->capability = oldUE->capability;
       oldUE->capability = NULL;
@@ -1095,10 +1087,18 @@ void dl_rrc_message_transfer(const f1ap_dl_rrc_message_t *dl_rrc)
     }
     /* Per TS 38.331 5.3.7.2: the UE releases the spCellConfig, so we drop it
      * from the current configuration. It will be reapplied when the
-     * reconfiguration has succeeded (indicated by the CU) */
-    asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&UE->reconfigCellGroup, UE->CellGroup);
-    ASN_STRUCT_FREE(asn_DEF_NR_SpCellConfig, UE->CellGroup->spCellConfig);
-    UE->CellGroup->spCellConfig = NULL;
+     * reconfiguration has succeeded (indicated by the CU).
+     * Guard against double reestablishment: if reestablish_rlc is already set,
+     * reconfigCellGroup was saved by the first reestablishment and
+     * CellGroup.spCellConfig is already NULL — don't overwrite. */
+    if (!UE->reestablish_rlc) {
+      asn_copy(&asn_DEF_NR_CellGroupConfig, (void **)&UE->reconfigCellGroup, UE->CellGroup);
+      ASN_STRUCT_FREE(asn_DEF_NR_SpCellConfig, UE->CellGroup->spCellConfig);
+      UE->CellGroup->spCellConfig = NULL;
+    } else {
+      LOG_W(NR_MAC, "UE %04x: reestablishment while previous reestablishment still pending, "
+            "keeping saved reconfigCellGroup with spCellConfig\n", UE->rnti);
+    }
     UE->reestablish_rlc = true;
     /* Per TS 38.331 clause 5.3.7.4: apply gNB RLC configuration for SRB1 to match the UE RLC configuration defined in 9.2.1.
      * Use configuration file values for timers t_poll_retransmit, t_reassembly and t_status_prohibit */

@@ -1,23 +1,5 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
-# * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
-# * contributor license agreements.  See the NOTICE file distributed with
-# * this work for additional information regarding copyright ownership.
-# * The OpenAirInterface Software Alliance licenses this file to You under
-# * the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# * except in compliance with the License.
-# * You may obtain a copy of the License at
-# *
-# *      http://www.openairinterface.org/?page_id=698
-# *
-# * Unless required by applicable law or agreed to in writing, software
-# * distributed under the License is distributed on an "AS IS" BASIS,
-# * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# * See the License for the specific language governing permissions and
-# * limitations under the License.
-# *-------------------------------------------------------------------------------
-# * For more information about the OpenAirInterface (OAI) Software Alliance:
-# *      contact@openairinterface.org
-# */
 #---------------------------------------------------------------------
 # Python for CI of OAI-eNB + COTS-UE
 #
@@ -33,7 +15,6 @@
 #-----------------------------------------------------------
 import sys		# arg
 import re		# reg
-import yaml
 import constants as CONST
 
 #-----------------------------------------------------------
@@ -44,6 +25,7 @@ import constants as CONST
 def ArgsParse(argvs,CiTestObj,RAN,HTML,CONTAINERS,HELP,SCA,CLUSTER):
 
     force_local = False
+    date_fmt = None
     while len(argvs) > 1:
         myArgv = argvs.pop(1)	# 0th is this file's name
 
@@ -56,6 +38,9 @@ def ArgsParse(argvs,CiTestObj,RAN,HTML,CONTAINERS,HELP,SCA,CLUSTER):
 
 
 	    #consider inline parameters
+        elif re.match(r'^\-\-datefmt=(.+)$', myArgv, re.IGNORECASE):
+            matchReg = re.match(r'^\-\-datefmt=(.+)$', myArgv, re.IGNORECASE)
+            date_fmt = matchReg.group(1)
         elif re.match(r'^\-\-mode=(.+)$', myArgv, re.IGNORECASE):
             matchReg = re.match(r'^\-\-mode=(.+)$', myArgv, re.IGNORECASE)
             mode = matchReg.group(1)
@@ -158,9 +143,6 @@ def ArgsParse(argvs,CiTestObj,RAN,HTML,CONTAINERS,HELP,SCA,CLUSTER):
         elif re.match(r'^\-\-OCRegistry=(.+)$', myArgv, re.IGNORECASE):
             matchReg = re.match(r'^\-\-OCRegistry=(.+)$', myArgv, re.IGNORECASE)
             CLUSTER.OCRegistry = matchReg.group(1)
-        elif re.match(r'^\-\-BuildId=(.+)$', myArgv, re.IGNORECASE):
-            matchReg = re.match(r'^\-\-BuildId=(.+)$', myArgv, re.IGNORECASE)
-            RAN.BuildId = matchReg.group(1)
         elif re.match(r'^\-\-FlexRicTag=(.+)$', myArgv, re.IGNORECASE):
             matchReg = re.match(r'^\-\-FlexRicTag=(.+)$', myArgv, re.IGNORECASE)
             CONTAINERS.flexricTag = matchReg.group(1)
@@ -168,4 +150,4 @@ def ArgsParse(argvs,CiTestObj,RAN,HTML,CONTAINERS,HELP,SCA,CLUSTER):
             HELP.GenericHelp(CONST.Version)
             sys.exit('Invalid Parameter: ' + myArgv)
 
-    return mode, force_local
+    return mode, force_local, date_fmt

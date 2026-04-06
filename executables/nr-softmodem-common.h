@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #ifndef NR_SOFTMODEM_COMMON_H
 #define NR_SOFTMODEM_COMMON_H
 
@@ -55,5 +59,7 @@
 #define CONFIG_HLP_ULBW_PHYTEST  "Set the number of PRBs used for ULSCH in PHYTEST mode\n"
 #define CONFIG_HLP_DLBM_PHYTEST  "Bitmap for DLSCH slots in period (slot 0 starts at LSB)\n"
 #define CONFIG_HLP_ULBM_PHYTEST  "Bitmap for ULSCH slots in period (slot 0 starts at LSB)\n"
+#define CONFIG_HLP_DLMOD_PHYTEST "For-DLSCH, if val is n, every nth slot in slots per frame will be scheduled. \n"
+#define CONFIG_HLP_ULMOD_PHYTEST "For ULSCH, if val is n, every nth slot in slots per frame will be scheduled. \n"
 void wait_gNBs(void);
 #endif

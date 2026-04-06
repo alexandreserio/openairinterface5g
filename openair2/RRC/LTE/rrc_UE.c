@@ -1,31 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file rrc_UE.c
+/*!
  * \brief rrc procedures for UE / rrc procedures for FeMBMS UE
- * \author Navid Nikaein, Raymond Knopp and Javier Morgade
- * \date 2011 - 2014 / FeMBMS 2019
- * \version 1.0
- * \company Eurecom, Vicomtech
- * \email: navid.nikaein@eurecom.fr, raymond.knopp@eurecom.fr and javier.morgade@ieee.org
  */
 
 #define RRC_UE
@@ -35,7 +13,7 @@
 #include <arpa/inet.h>
 
 #include "assertions.h"
-#include "hashtable.h"
+#include "ds/hashtable.h"
 #include "oai_asn1.h"
 #include "rrc_defs.h"
 #include "rrc_extern.h"
@@ -130,9 +108,8 @@ static int decode_SIB1( const protocol_ctxt_t *const ctxt_pP, const uint8_t eNB_
 
 static int decode_SIB1_MBMS( const protocol_ctxt_t *const ctxt_pP, const uint8_t eNB_index, const uint8_t rsrq, const uint8_t rsrp );
 
-typedef struct rrc_dcch_data_copy_t
-{
-    LTE_DL_DCCH_Message_t *dl_dcch_msg;
+typedef struct {
+  LTE_DL_DCCH_Message_t *dl_dcch_msg;
 } rrc_dcch_data_copy_t;
 
 static void rrc_ue_process_ueCapabilityEnquiry(const protocol_ctxt_t *const ctxt_pP,

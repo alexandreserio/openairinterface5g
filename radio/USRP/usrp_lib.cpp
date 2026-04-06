@@ -1,28 +1,7 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/** usrp_lib.cpp
- *
- * \author: HongliangXU : hong-liang-xu@agilent.com
- */
 #define _LARGEFILE_SOURCE
 #define _FILE_OFFSET_BITS 64
 #include <string.h>
@@ -553,7 +532,7 @@ static int trx_usrp_write(openair0_device_t *device,
       LOG_D(HW, "Signaling TX TS %llu\n", (unsigned long long)timestamp);
       pthread_cond_signal(&write_thread->cond_write);
       pthread_mutex_unlock(&write_thread->mutex_write);
-      return 0;
+      return nsamps;
     }
 }
 
@@ -1336,9 +1315,9 @@ extern "C" {
       case 7680000:
         s->usrp->set_master_clock_rate(30.72e6);
         //openair0_cfg[0].samples_per_packet    = 1024;
-        openair0_cfg[0].tx_sample_advance     = 190;
-        openair0_cfg[0].tx_bw                 = 20e6;
-        openair0_cfg[0].rx_bw                 = 20e6;
+        openair0_cfg[0].tx_sample_advance     = 93;
+        openair0_cfg[0].tx_bw                 = 5e6;
+        openair0_cfg[0].rx_bw                 = 5e6;
         break;
 
       case 1920000:

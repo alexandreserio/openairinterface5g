@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # OAI 7.2 Fronthaul Interface Tutorial
 
 **Table of Contents**
@@ -61,19 +63,18 @@ We tested the category A radio units listed below.
 |-----------------|---------------------------------------------|
 |VVDN LPRU        |03-v3.0.5                                    |
 |LiteON RU        |01.00.08/02.00.03/02.00.10                   |
-|Benetel 650      |RAN650-1v1.0.4-dda1bf5|RAN650-1v1.2.2-2fa04bc|
-|Benetel 550      |RAN550-1v1.0.4-605a25a|RAN550-1v1.2.2-2fa04bc|
+|Benetel 650      |RAN650-1v1.0.4-dda1bf5/RAN650-1v1.2.2-2fa04bc/RAN650-1v1.4.2-NM-c48047d|
+|Benetel 550      |RAN550-1v1.0.4-605a25a/RAN550-1v1.2.2-2fa04bc/RAN550-1v1.4.1-M-25fa970/RAN550-1v2.0.5-M-92a9d2c|
 |Foxconn RPQN     |v3.1.15q.551_rc10                            |
 
 Tested libxran releases:
 
 | Vendor                                  |
 |-----------------------------------------|
-| `oran_e_maintenance_release_v1.0`       |
 | `oran_f_release_v1.0`                   |
 
 
-**Note**: The libxran driver of OAI identifies the above E release version as "5.1.0" (E is fifth letter, then 1.0), and the above F release as "6.1.0".
+**Note**: The libxran driver of OAI identifies the above F release version as "6.1.0" (F is the sixth letter, then 1.0).
 
 ### Configure your server
 
@@ -375,14 +376,6 @@ cd ~/openairinterface5g/
 
 Download ORAN FHI DU library, checkout the correct version, and apply the correct patch (available in `oai_folder/cmake_targets/tools/oran_fhi_integration_patches`).
 
-#### E release
-```bash
-git clone https://gerrit.o-ran-sc.org/r/o-du/phy.git ~/phy
-cd ~/phy
-git checkout oran_e_maintenance_release_v1.0
-git apply ~/openairinterface5g/cmake_targets/tools/oran_fhi_integration_patches/E/oaioran_E.patch
-```
-
 #### F release
 ```bash
 git clone https://gerrit.o-ran-sc.org/r/o-du/phy.git ~/phy
@@ -404,7 +397,6 @@ This feature is intended to enable experiments and future improvements on Arm sy
 ```bash
 cd ~/phy/fhi_lib/lib
 make clean
-RTE_SDK=~/dpdk-stable-20.11.9/ XRAN_DIR=~/phy/fhi_lib make XRAN_LIB_SO=1 # E release
 WIRELESS_SDK_TOOLCHAIN=gcc RTE_SDK=~/dpdk-stable-20.11.9/ XRAN_DIR=~/phy/fhi_lib make XRAN_LIB_SO=1 # F release
 ...
 [AR] build/libxran.so
@@ -573,13 +565,16 @@ flexran_prach_workaround=disabled
 dl_tuning_special_slot=0x13b6
 ```
 
-#### LITEON
+In addition, PRACH format 0 is also verified with FW v2.0.5. An example gNB config file can be found at [`gnb.sa.band77.273prb.fhi72.2x2-benetel550-long-prach.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band77.273prb.fhi72.2x2-benetel550-long-prach.conf). On the RU side, the following parameters shall be modified:
+```bash
+mimo_mode=1_3
+prach_format=long
+prach_freq_offset_dynamic=false
+lf_prach_compression_enable=true
+lf_prach_slot_id=0
+```
 
-The OAI configuration file [`gnb.sa.band78.273prb.fhi72.4x4-liteon.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.4x4-liteon.conf) corresponds to:
-- TDD pattern `DDDSU`, 2.5ms
-- Bandwidth 100MHz
-- MTU 1500
-- MTU 9216: v02.00.10
+#### LITEON
 
 ##### RU configuration
 
@@ -603,11 +598,34 @@ Once the RU is PTP synced, and RF state and DPD are `Ready`, write `configure te
 - DU MAC address
 ...
 
-The configuration mode example:
+###### FR1
+
+The OAI configuration file [`gnb.sa.band78.273prb.fhi72.4x4-liteon.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.4x4-liteon.conf) corresponds to:
+- TDD pattern `DDDSU`, 2.5ms
+- Bandwidth 100MHz
+- MTU 1500
+- MTU 9216: v02.00.10
+
+The RU configuration mode example:
 ```bash
 compression-bit 9 # set IQ bitwidth for PxSCH/PRACH
 eAXC_id 4 5 6 7 # set PRACH eAxC IDs
 jumboframe 1 # enable jumbo frame
+...
+```
+
+###### FR2
+
+The OAI configuration file [`gnb.sa.band257.66prb.fhi72.2x2-liteon.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band257.66prb.fhi72.2x2-liteon.conf) corresponds to:
+- TDD pattern `DDDDDDDSUU`, 1.25ms
+- Bandwidth 100MHz
+- FW v02.00.07
+- DL uses jumbo frame, UL uses standard MTU of 1500 bytes
+
+The RU configuration mode example:
+```bash
+compression-bit 8 # set IQ bitwidth for PxSCH/PRACH
+eAXC_id 0 1 # set PRACH eAxC IDs
 ...
 ```
 
@@ -967,7 +985,7 @@ Sample configuration files for OAI gNB, specific to the manufacturer of the radi
 4. Benetel 550 RU:
 [`gnb.sa.band78.273prb.fhi72.4x4-benetel550.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.4x4-benetel550.conf)
 [`gnb.sa.band78.273prb.fhi72.4x2-benetel550.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.4x2-benetel550.conf)
-[`gnb.sa.band78.273prb.fhi72.2x2-benetel550-16b.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.2x2-benetel550-16b.conf) - only with E release; with F, UL U-plane fragmentation is not correct
+[`gnb.sa.band78.273prb.fhi72.2x2-benetel550-16b.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.2x2-benetel550-16b.conf) - tested successfully with E release; with F, UL U-plane fragmentation is not correct
 5. Metanoia RU:
 [`gnb.sa.band78.273prb.fhi72.4x4-metanoia.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.273prb.fhi72.4x4-metanoia.conf)
 
@@ -980,6 +998,14 @@ Edit the sample OAI gNB configuration file and check following parameters:
   * `GNB_IPV4_ADDRESS_FOR_NGU` shall match your gNB N3 interface IP address
   * `prach_ConfigurationIndex`
   * `prach_msg1_FrequencyStart`
+  * `ssPBCH_BlockPower` is average EPRE of the resource elements carrying the secondary synchronization signals, expressed in dBm. It can be estimated using the following formula:
+
+    > ssPBCH_BlockPower = P_TX − 10 x log10(N_RE) + 10 x log10(N_antenna_SSB)
+
+    where:
+    * `P_TX` is the total transmit power of the RU in dBm (configured on the RU).
+    * `N_RE` is the number of resource elements used for the transmission.
+    * `N_antenna_SSB` is the number of antenna ports used for SSB transmission (currently, a single antenna port is used for SSB transmission).
   * Adjust the frequency, bandwidth and SSB position
 
 * `L1s` section
@@ -1022,6 +1048,7 @@ Edit the sample OAI gNB configuration file and check following parameters:
       [Memory in DPDK](https://www.dpdk.org/memory-in-dpdk-part-2-deep-dive-into-iova/)
   * `owdm_enable`: used for eCPRI One-Way Delay Measurements; it depends if the RU supports it; if not set to 1 (enabled), default value is 0 (disabled)
   * `fh_config`
+    * `RunSlotPrbMapBySymbol`: enable CP multisection (one symbol per section); default value is 0
     *  DU delay profile (`T1a` and `Ta4`): pairs of numbers `(x, y)` specifying minimum and maximum delays
     * `ru_config`: RU-specific configuration:
       * `iq_width`: Width of DL/UL IQ samples: if 16, no compression, if <16, applies
@@ -1031,6 +1058,7 @@ Edit the sample OAI gNB configuration file and check following parameters:
     * `prach_config`: PRACH-specific configuration
       * `eAxC_offset`:  PRACH antenna offset; if not set, default value of `N = max(Nrx,Ntx)` is used
       * `kbar`: the PRACH guard interval, provided in RU
+  * `app_id`: `DU` or `RU`. Sets the application `id` value in xRAN. Use the default value: `DU`.
 
 Layer mapping (eAxC offsets) happens as follows:
 - For PUSCH/PDSCH, the layers are mapped to `[0,1,...,Nrx-1]/[0,1,...,Ntx-1]` where `Nrx/Ntx` is the
@@ -1491,6 +1519,7 @@ fhi_72 = {
   * `dpdk_iova_mode`: [*]
   * `owdm_enable`: [*]
   * `fh_config`: only DU delay profile (`T1a` and `Ta4`)
+  * `app_id`: [*]
 
 [*] see [Configure OAI gNB](#configure-oai-gnb) for more details
 

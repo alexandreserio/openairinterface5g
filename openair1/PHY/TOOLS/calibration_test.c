@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
+ */
+
 #include <stdint.h>
 #include <openair1/PHY/impl_defs_top.h>
 #include <radio/COMMON/common_lib.h>
@@ -11,7 +15,7 @@ unsigned int mmapped_dma=0;
 uint32_t timing_advance;
 int8_t threequarter_fs;
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
-int32_t uplink_frequency_offset[MAX_NUM_CCs][4];
+int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 int cpu_meas_enabled;
 THREAD_STRUCT thread_struct;
 uint32_t target_ul_mcs = 9;
@@ -23,6 +27,8 @@ uint32_t target_dl_bw = 50;
 uint32_t target_dl_Nl;
 uint32_t target_ul_Nl;
 char *uecap_file;
+uint32_t dlsch_slot_modval;
+uint32_t ulsch_slot_modval;
 #include <executables/nr-softmodem.h>
 
 int read_recplayconfig(recplay_conf_t **recplay_conf, recplay_state_t **recplay_state) {return 0;}

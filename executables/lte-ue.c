@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file lte-ue.c
+/*!
  * \brief threads and support functions for real-time LTE UE target
- * \author R. Knopp, F. Kaltenberger, Navid Nikaein
- * \date 2015
- * \version 0.1
- * \company Eurecom
- * \email: knopp@eurecom.fr,florian.kaltenberger@eurecom.fr, navid.nikaein@eurecom.fr
- * \note
- * \warning
  */
 #include "lte-softmodem.h"
 
@@ -437,8 +413,10 @@ static void *UE_thread_synch(void *arg) {
       printf( "Scanning band %d, dl_min %"PRIu32", ul_min %"PRIu32"\n", current_band, eutra_bands[ind].dl_min,eutra_bands[ind].ul_min);
 
       if ((eutra_bands[ind].dl_min <= UE->frame_parms.dl_CarrierFreq) && (eutra_bands[ind].dl_max >= UE->frame_parms.dl_CarrierFreq)) {
-        for (i=0; i<4; i++)
-          uplink_frequency_offset[CC_id][i] = eutra_bands[ind].ul_min - eutra_bands[ind].dl_min;
+        for (i=0; i<4; i++) {
+          int32_t delta = eutra_bands[ind].ul_min - eutra_bands[ind].dl_min;
+          uplink_frequency_offset[CC_id][i] = delta;
+        }
 
         found = 1;
         break;
@@ -473,8 +451,8 @@ static void *UE_thread_synch(void *arg) {
 
     for (i=0; i<openair0_cfg[UE->rf_map.card].rx_num_channels; i++) {
       downlink_frequency[UE->rf_map.card][UE->rf_map.chain+i] = bands_to_scan.band_info[CC_id].dl_min;
-      uplink_frequency_offset[UE->rf_map.card][UE->rf_map.chain+i] =
-        bands_to_scan.band_info[CC_id].ul_min-bands_to_scan.band_info[CC_id].dl_min;
+      int32_t delta = bands_to_scan.band_info[CC_id].ul_min - bands_to_scan.band_info[CC_id].dl_min;
+      uplink_frequency_offset[UE->rf_map.card][UE->rf_map.chain+i] = delta;
       openair0_cfg[UE->rf_map.card].rx_freq[UE->rf_map.chain+i] = downlink_frequency[CC_id][i];
       openair0_cfg[UE->rf_map.card].tx_freq[UE->rf_map.chain+i] =
         downlink_frequency[CC_id][i]+uplink_frequency_offset[CC_id][i];
@@ -517,7 +495,8 @@ static void *UE_thread_synch(void *arg) {
 
         for (i=0; i<openair0_cfg[UE->rf_map.card].rx_num_channels; i++) {
           downlink_frequency[UE->rf_map.card][UE->rf_map.chain+i] = bands_to_scan.band_info[current_band].dl_min+current_offset;
-          uplink_frequency_offset[UE->rf_map.card][UE->rf_map.chain+i] = bands_to_scan.band_info[current_band].ul_min-bands_to_scan.band_info[0].dl_min + current_offset;
+          int32_t delta = bands_to_scan.band_info[current_band].ul_min - bands_to_scan.band_info[0].dl_min + current_offset;
+          uplink_frequency_offset[UE->rf_map.card][UE->rf_map.chain+i] = delta;
           openair0_cfg[UE->rf_map.card].rx_freq[UE->rf_map.chain+i] = downlink_frequency[CC_id][i];
           openair0_cfg[UE->rf_map.card].tx_freq[UE->rf_map.chain+i] = downlink_frequency[CC_id][i]+uplink_frequency_offset[CC_id][i];
           openair0_cfg[UE->rf_map.card].rx_gain[UE->rf_map.chain+i] = UE->rx_total_gain_dB;

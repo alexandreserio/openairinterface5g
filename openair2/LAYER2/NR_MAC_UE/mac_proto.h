@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/* \file proto.h
+/*
  * \brief MAC functions prototypes for gNB and UE
- * \author R. Knopp, K.H. HSU
- * \date 2018
- * \version 0.1
- * \company Eurecom / NTUST
- * \email: knopp@eurecom.fr, kai-hsiang.hsu@eurecom.fr
- * \note
- * \warning
  */
 
 #ifndef __LAYER2_MAC_UE_PROTO_H__
@@ -166,11 +142,7 @@ typedef struct {
   enum { b_none, b_long, b_short, b_short_trunc, b_long_trunc } type_bsr;
 } type_bsr_t;
 
-int nr_write_ce_ulsch_pdu(uint8_t *mac_ce,
-                          NR_UE_MAC_INST_t *mac,
-                          NR_SINGLE_ENTRY_PHR_MAC_CE *power_headroom,
-                          const type_bsr_t *bsr,
-                          uint8_t *mac_ce_end);
+int nr_write_ce_ulsch_pdu(uint8_t *mac_ce, NR_SINGLE_ENTRY_PHR_MAC_CE *power_headroom, const type_bsr_t *bsr, uint8_t *mac_ce_end);
 
 void ue_dci_configuration(NR_UE_MAC_INST_t *mac, fapi_nr_dl_config_request_t *dl_config, const frame_t frame, const int slot);
 void set_precoding_information_parameters(nfapi_nr_ue_pusch_pdu_t *pusch_config_pdu,
@@ -241,10 +213,9 @@ int get_sum_delta_pucch(NR_UE_MAC_INST_t *mac, int slot, frame_t frame);
 void ul_ports_config(NR_UE_MAC_INST_t *mac,
                      int *n_front_load_symb,
                      nfapi_nr_ue_pusch_pdu_t *pusch_config_pdu,
-                     dci_pdu_rel15_t *dci,
-                     nr_dci_format_t dci_format);
+                     dci_pdu_rel15_t *dci);
 
-bool init_RA(NR_UE_MAC_INST_t *mac, int frame);
+bool init_RA(NR_UE_MAC_INST_t *mac);
 
 /* Random Access */
 /* \brief This function schedules the PRACH according to prach_ConfigurationIndex and TS 38.211 tables 6.3.3.2.x
@@ -262,7 +233,7 @@ void configure_csi_resource_mapping(fapi_nr_dl_config_csirs_pdu_rel15_t *csirs_c
 
 bool is_lcid_suspended(NR_UE_MAC_INST_t *mac, int lcid);
 void nr_ra_contention_resolution_failed(NR_UE_MAC_INST_t *mac);
-void nr_ra_succeeded(NR_UE_MAC_INST_t *mac, const uint8_t gNB_index, const frame_t frame, const int slot);
+void nr_ra_succeeded(NR_UE_MAC_INST_t *mac, const frame_t frame, const int slot);
 void nr_ra_backoff_setting(RA_config_t *ra);
 void nr_get_RA_window(NR_UE_MAC_INST_t *mac);
 void prepare_msg4_msgb_feedback(NR_UE_MAC_INST_t *mac, int pid, int ack_nack);
@@ -283,7 +254,7 @@ int16_t get_prach_tx_power(NR_UE_MAC_INST_t *mac);
 void schedule_RA_after_SR_failure(NR_UE_MAC_INST_t *mac);
 void nr_rar_not_successful(NR_UE_MAC_INST_t *mac);
 void ra_resource_selection(NR_UE_MAC_INST_t *mac);
-void nr_Msg3_transmitted(NR_UE_MAC_INST_t *mac, uint8_t CC_id, frame_t frameP, slot_t slotP, uint8_t gNB_id);
+void nr_Msg3_transmitted(NR_UE_MAC_INST_t *mac);
 void trigger_MAC_UE_RA(NR_UE_MAC_INST_t *mac, dci_pdu_rel15_t *pdcch_order);
 void nr_get_Msg3_MsgA_PUSCH_payload(NR_UE_MAC_INST_t *mac, uint8_t *buf, int TBS_max);
 void handle_time_alignment_timer_expired(NR_UE_MAC_INST_t *mac);
@@ -377,4 +348,5 @@ void nr_ue_sidelink_scheduler(nr_sidelink_indication_t *sl_ind, NR_UE_MAC_INST_t
 
 NR_SearchSpace_t *get_common_search_space(const NR_UE_MAC_INST_t *mac, const NR_SearchSpaceId_t ss_id);
 ssb_ro_preambles_t get_ssb_ro_preambles_4step(struct NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB *config);
+void update_pdcch_config(NR_UE_MAC_INST_t *mac);
 #endif

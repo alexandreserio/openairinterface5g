@@ -1,35 +1,17 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "nr_phy_init.h"
 #include "openair1/PHY/defs_RU.h"
 #include "openair1/PHY/impl_defs_nr.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 #include "assertions.h"
 #include "PHY/MODULATION/nr_modulation.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_ue.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
 #include "PHY/NR_REFSIG/pss_nr.h"
 #include "PHY/NR_REFSIG/ul_ref_seq_nr.h"
-#include "PHY/NR_REFSIG/refsig_defs_ue.h"
+#include "PHY/NR_REFSIG/sl_refsig_defs.h"
 #include "PHY/NR_REFSIG/nr_refsig.h"
 #include "PHY/NR_REFSIG/nr_mod_table.h"
 #include "openair2/COMMON/prs_nr_paramdef.h"
@@ -263,10 +245,10 @@ int init_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
 
     // ceil((NB_RB*8(max allocation per RB)*2(QPSK))/32)
     ue->nr_csi_info = malloc16_clear(sizeof(nr_csi_info_t));
-    ue->nr_csi_info->csi_rs_generated_signal = malloc16(NR_MAX_NB_PORTS * sizeof(*ue->nr_csi_info->csi_rs_generated_signal));
-    for (int i = 0; i < NR_MAX_NB_PORTS; i++) {
+    ue->nr_csi_info->csi_rs_generated_signal = malloc16(NR_MAX_CSI_PORTS * sizeof(*ue->nr_csi_info->csi_rs_generated_signal));
+    for (int i = 0; i < NR_MAX_CSI_PORTS; i++) {
       ue->nr_csi_info->csi_rs_generated_signal[i] =
-          malloc16_clear(fp->samples_per_frame_wCP * sizeof(**ue->nr_csi_info->csi_rs_generated_signal));
+          malloc16_clear(fp->samples_per_slot_wCP * sizeof(**ue->nr_csi_info->csi_rs_generated_signal));
     }
 
     ue->nr_srs_info = malloc16_clear(sizeof(nr_srs_info_t));
@@ -292,7 +274,7 @@ static void sl_ue_free(PHY_VARS_NR_UE *UE)
   }
 }
 
-void term_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
+void term_nr_ue_signal(PHY_VARS_NR_UE *ue)
 {
   const NR_DL_FRAME_PARMS* fp = &ue->frame_parms;
   phy_term_nr_top();
@@ -312,7 +294,7 @@ void term_nr_ue_signal(PHY_VARS_NR_UE *ue, int nb_connected_gNB)
 
   for (int gNB_id = 0; gNB_id < ue->n_connected_gNB; gNB_id++) {
 
-    for (int i=0; i<NR_MAX_NB_PORTS; i++) {
+    for (int i = 0; i < NR_MAX_CSI_PORTS; i++) {
       free_and_zero(ue->nr_csi_info->csi_rs_generated_signal[i]);
     }
     free_and_zero(ue->nr_csi_info->csi_rs_generated_signal);

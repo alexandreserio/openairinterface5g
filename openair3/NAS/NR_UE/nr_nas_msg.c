@@ -1,32 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file nr_nas_msg.c
+/*!
  * \brief Definitions of handlers and callbacks for NR NAS UE task
- * \author Yoshio INOUE, Masayuki HARADA
- * \email yoshio.inoue@fujitsu.com,masayuki.harada@fujitsu.com
- * \date 2020
- * \version 0.1
- *
- * 2023.01.27 Vladimir Dorovskikh 16 digits IMEISV
  */
 
 #include "nr_nas_msg.h"
@@ -38,6 +15,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "common/utils/ds/byte_array.h"
+#include "common/utils/nr/nr_common.h"
 #include "AuthenticationResponseParameter.h"
 #include "FGCNasMessageContainer.h"
 #include "FGSDeregistrationRequestUEOriginating.h"
@@ -77,6 +55,12 @@
 
 static nr_ue_nas_t nr_ue_nas[MAX_NUM_NR_UE_INST] = {0};
 
+nr_ue_nas_t *get_nr_ue_nas_info(uint8_t ue_inst)
+{
+  AssertFatal(ue_inst >= 0 && ue_inst < MAX_NUM_NR_UE_INST, "Invalid UE instance\n");
+  return &nr_ue_nas[ue_inst];
+}
+
 #define FOREACH_STATE(TYPE_DEF)                  \
   TYPE_DEF(NAS_SECURITY_NO_SECURITY_CONTEXT, 0)  \
   TYPE_DEF(NAS_SECURITY_UNPROTECTED, 1)          \
@@ -100,26 +84,13 @@ static fgmm_msg_header_t set_mm_header(fgs_nas_msg_t type, Security_header_t sec
   return mm_header;
 }
 
-static void servingNetworkName(uint8_t *msg, char *imsiStr, int mnc_size)
+static void servingNetworkName(uint8_t *msg, plmn_id_t *plmn_id)
 {
   // SNN-network-identifier in TS 24.501
   // TS 24.501: If the MNC of the serving PLMN has two digits, then a zero is added at the beginning.
-
-  // MNC
-  char mnc[4];
-  if (mnc_size == 2) {
-    snprintf(mnc, sizeof(mnc), "0%c%c", imsiStr[3], imsiStr[4]);
-  } else {
-    snprintf(mnc, sizeof(mnc), "%c%c%c", imsiStr[3], imsiStr[4], imsiStr[5]);
-  }
-
-  // MCC
-  char mcc[4];
-  snprintf(mcc, sizeof(mcc), "%c%c%c", imsiStr[0], imsiStr[1], imsiStr[2]);
-
   int size = 64;
 
-  snprintf((char *)msg, size, "5G:mnc%3s.mcc%3s.3gppnetwork.org", mnc, mcc);
+  snprintf((char *)msg, size, "5G:mnc%03d.mcc%03d.3gppnetwork.org", plmn_id->mnc, plmn_id->mcc);
 }
 
 static const char *print_info(uint8_t id, const text_info_t *array, uint8_t array_size)
@@ -504,11 +475,11 @@ static int fill_imeisv(FGSMobileIdentity *mi, const uicc_t *uicc)
   return 19;
 }
 
-void transferRES(uint8_t ck[16], uint8_t ik[16], uint8_t *input, uint8_t rand[16], uint8_t *output, uicc_t *uicc)
+void transferRES(uint8_t ck[16], uint8_t ik[16], uint8_t *input, uint8_t rand[16], uint8_t *output, plmn_id_t *plmn_id)
 {
   uint8_t S[100] = {0};
   S[0] = 0x6B;
-  servingNetworkName(S + 1, uicc->imsiStr, uicc->nmc_size);
+  servingNetworkName(S + 1, plmn_id);
   int netNamesize = strlen((char *)S + 1);
   S[1 + netNamesize] = (netNamesize & 0xff00) >> 8;
   S[2 + netNamesize] = (netNamesize & 0x00ff);
@@ -547,7 +518,7 @@ void transferRES(uint8_t ck[16], uint8_t ik[16], uint8_t *input, uint8_t rand[16
   memcpy(output, out + 16, 16);
 }
 
-void derive_kausf(uint8_t ck[16], uint8_t ik[16], uint8_t sqn[6], uint8_t kausf[32], uicc_t *uicc)
+void derive_kausf(uint8_t ck[16], uint8_t ik[16], uint8_t sqn[6], uint8_t kausf[32], plmn_id_t *plmn_id)
 {
   uint8_t S[100] = {0};
   uint8_t key[32] = {0};
@@ -555,7 +526,7 @@ void derive_kausf(uint8_t ck[16], uint8_t ik[16], uint8_t sqn[6], uint8_t kausf[
   memcpy(&key[0], ck, 16);
   memcpy(&key[16], ik, 16); // KEY
   S[0] = 0x6A;
-  servingNetworkName(S + 1, uicc->imsiStr, uicc->nmc_size);
+  servingNetworkName(S + 1, plmn_id);
   int netNamesize = strlen((char *)S + 1);
   S[1 + netNamesize] = (uint8_t)((netNamesize & 0xff00) >> 8);
   S[2 + netNamesize] = (uint8_t)(netNamesize & 0x00ff);
@@ -569,11 +540,11 @@ void derive_kausf(uint8_t ck[16], uint8_t ik[16], uint8_t sqn[6], uint8_t kausf[
   kdf(key, data, 32, kausf);
 }
 
-void derive_kseaf(uint8_t kausf[32], uint8_t kseaf[32], uicc_t *uicc)
+void derive_kseaf(uint8_t kausf[32], uint8_t kseaf[32], plmn_id_t *plmn_id)
 {
   uint8_t S[100] = {0};
   S[0] = 0x6C; // FC
-  servingNetworkName(S + 1, uicc->imsiStr, uicc->nmc_size);
+  servingNetworkName(S + 1, plmn_id);
   int netNamesize = strlen((char *)S + 1);
   S[1 + netNamesize] = (uint8_t)((netNamesize & 0xff00) >> 8);
   S[2 + netNamesize] = (uint8_t)(netNamesize & 0x00ff);
@@ -640,14 +611,14 @@ static void derive_ue_keys(uint8_t *buf, nr_ue_nas_t *nas)
   uint8_t ck[16], ik[16];
   f2345(nas->uicc->key, rand, resTemp, ck, ik, ak, nas->uicc->opc);
 
-  transferRES(ck, ik, resTemp, rand, output, nas->uicc);
+  transferRES(ck, ik, resTemp, rand, output, nas->sn_id);
 
   for (int index = 0; index < 6; index++) {
     sqn[index] = buf[26 + index];
   }
 
-  derive_kausf(ck, ik, sqn, kausf, nas->uicc);
-  derive_kseaf(kausf, kseaf, nas->uicc);
+  derive_kausf(ck, ik, sqn, kausf, nas->sn_id);
+  derive_kseaf(kausf, kseaf, nas->sn_id);
   derive_kamf(kseaf, kamf, 0x0000, nas->uicc);
   derive_kgnb(kamf, nas->security.nas_count_ul, kgnb);
 
@@ -1178,6 +1149,10 @@ static void generateSecurityModeComplete(nr_ue_nas_t *nas, as_nas_info_t *initia
       security_header_len
       + mm_msg_encode(plain, (uint8_t *)(initialNasMsg->nas_data + security_header_len), size - security_header_len);
 
+  if (rr.nas_data) {
+    free(rr.nas_data);
+  }
+
   /* ciphering */
   uint8_t buf[initialNasMsg->length - 7];
   stream_cipher.context = nas->security_container->ciphering_context;
@@ -1555,7 +1530,9 @@ static void handle_pdu_session_accept(const nr_ue_nas_t *nas, uint8_t *pdu_buffe
   int idx;
   for (idx = 0; idx < nas->uicc->n_pdu_sessions; ++idx) {
     const pdu_session_config_t *pdu = &nas->uicc->pdu_sessions[idx];
-    if (pdu->id == sm_header.pdu_session_id && pdu->type == msg.pdu_type)
+    bool msg_ipv4or6 = msg.pdu_type == PDU_SESSION_TYPE_IPV4 || msg.pdu_type == PDU_SESSION_TYPE_IPV6;
+    bool correct_type = pdu->type == msg.pdu_type || (pdu->type == PDU_SESSION_TYPE_IPV4V6 && msg_ipv4or6);
+    if (pdu->id == sm_header.pdu_session_id && correct_type)
       break;
   }
   if (idx == nas->uicc->n_pdu_sessions) {
@@ -1787,7 +1764,7 @@ static void send_nas_5gmm_ind(instance_t instance, const Guti5GSMobileIdentity_t
   MessageDef *msg = itti_alloc_new_message(TASK_NAS_NRUE, 0, NAS_5GMM_IND);
   nas_5gmm_ind_t *ind = &NAS_5GMM_IND(msg);
   LOG_I(NR_RRC, "5G-GUTI: AMF pointer %u, AMF Set ID %u, 5G-TMSI %u \n", guti->amfpointer, guti->amfsetid, guti->tmsi);
-  ind->fiveG_STMSI = ((uint64_t)guti->amfsetid << 38) | ((uint64_t)guti->amfpointer << 32) | guti->tmsi;
+  ind->fiveG_STMSI = nr_construct_5g_s_tmsi(guti->amfsetid, guti->amfpointer, guti->tmsi);
   itti_send_msg_to_task(TASK_RRC_NRUE, instance, msg);
 }
 

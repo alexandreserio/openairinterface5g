@@ -1,4 +1,7 @@
+# SPDX-License-Identifier: LicenseRef-CSSL-1.0
+
 add_subdirectory(LPP)
+add_subdirectory(ocp-gtpu)
 add_subdirectory(M3AP)
 add_subdirectory(S1AP)
 add_subdirectory(NAS)

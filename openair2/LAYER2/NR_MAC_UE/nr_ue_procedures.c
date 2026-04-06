@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/* \file ue_procedures.c
+/*
  * \brief procedures related to UE
- * \author R. Knopp, K.H. HSU, G. Casati
- * \date 2018
- * \version 0.1
- * \company Eurecom / NTUST
- * \email: knopp@eurecom.fr, kai-hsiang.hsu@eurecom.fr, guido.casati@iis.fraunhofer.de
- * \note
- * \warning
  */
 
 
@@ -51,9 +27,9 @@
 
 /* utils */
 #include "assertions.h"
+#include "reverse_bits.h"
 #include "oai_asn1.h"
 #include "common/utils/LOG/log.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 #include "LAYER2/nr_rlc/nr_rlc_oai_api.h"
 
 // #define DEBUG_MIB
@@ -843,10 +819,23 @@ static int nr_ue_process_dci_dl_10(NR_UE_MAC_INST_t *mac,
   dlsch_pdu->number_symbols = tda_info.nrOfSymbols;
   dlsch_pdu->start_symbol = tda_info.startSymbolIndex;
 
-  struct NR_DMRS_DownlinkConfig *dl_dmrs_config = NULL;
-  if (pdsch_config)
-    dl_dmrs_config = (tda_info.mapping_type == typeA) ? pdsch_config->dmrs_DownlinkForPDSCH_MappingTypeA->choice.setup
-                                                      : pdsch_config->dmrs_DownlinkForPDSCH_MappingTypeB->choice.setup;
+  mappingType_t type = tda_info.mapping_type;
+  NR_DMRS_DownlinkConfig_t *dl_dmrs_config = NULL;
+  if (pdsch_config) {
+    if (type == typeA) {
+      if (!pdsch_config->dmrs_DownlinkForPDSCH_MappingTypeA) {
+        LOG_E(MAC, "Invalid PDSCH DMRS configuration, expected typeA but not configured\n");
+        return -1;
+      } else
+        dl_dmrs_config = pdsch_config->dmrs_DownlinkForPDSCH_MappingTypeA->choice.setup;
+    } else { // typeB
+      if (!pdsch_config->dmrs_DownlinkForPDSCH_MappingTypeB) {
+        LOG_E(MAC, "Invalid PDSCH DMRS configuration, expected typeB but not configured\n");
+        return -1;
+      } else
+        dl_dmrs_config = pdsch_config->dmrs_DownlinkForPDSCH_MappingTypeB->choice.setup;
+    }
+  }
 
   dlsch_pdu->nscid = 0;
   if (dl_dmrs_config && dl_dmrs_config->scramblingID0)
@@ -1184,9 +1173,23 @@ static int nr_ue_process_dci_dl_11(NR_UE_MAC_INST_t *mac,
   dlsch_pdu->number_symbols = tda_info.nrOfSymbols;
   dlsch_pdu->start_symbol = tda_info.startSymbolIndex;
 
-  struct NR_DMRS_DownlinkConfig *dl_dmrs_config = (tda_info.mapping_type == typeA)
-                                                      ? pdsch_Config->dmrs_DownlinkForPDSCH_MappingTypeA->choice.setup
-                                                      : pdsch_Config->dmrs_DownlinkForPDSCH_MappingTypeB->choice.setup;
+  mappingType_t type = tda_info.mapping_type;
+  NR_DMRS_DownlinkConfig_t *dl_dmrs_config = NULL;
+  if (pdsch_Config) {
+    if (type == typeA) {
+      if (!pdsch_Config->dmrs_DownlinkForPDSCH_MappingTypeA) {
+        LOG_E(MAC, "Invalid PDSCH DMRS configuration, expected typeA but not configured\n");
+        return -1;
+      } else
+        dl_dmrs_config = pdsch_Config->dmrs_DownlinkForPDSCH_MappingTypeA->choice.setup;
+    } else { // typeB
+      if (!pdsch_Config->dmrs_DownlinkForPDSCH_MappingTypeB) {
+        LOG_E(MAC, "Invalid PDSCH DMRS configuration, expected typeB but not configured\n");
+        return -1;
+      } else
+        dl_dmrs_config = pdsch_Config->dmrs_DownlinkForPDSCH_MappingTypeB->choice.setup;
+    }
+  }
 
   switch (dci->dmrs_sequence_initialization.val) {
     case 0:
@@ -1417,9 +1420,9 @@ static int nr_ue_process_dci_dl_11(NR_UE_MAC_INST_t *mac,
   dlsch_pdu->tbslbrm = nr_compute_tbslbrm(dlsch_pdu->mcs_table, sc_info->dl_bw_tbslbrm, nl_tbslbrm);
   /*PTRS configuration */
   dlsch_pdu->pduBitmap = 0;
-  if (pdsch_Config->dmrs_DownlinkForPDSCH_MappingTypeA->choice.setup->phaseTrackingRS != NULL) {
+  if (dl_dmrs_config->phaseTrackingRS != NULL) {
     bool valid_ptrs_setup =
-        set_dl_ptrs_values(pdsch_Config->dmrs_DownlinkForPDSCH_MappingTypeA->choice.setup->phaseTrackingRS->choice.setup,
+        set_dl_ptrs_values(dl_dmrs_config->phaseTrackingRS->choice.setup,
                            dlsch_pdu->number_rbs,
                            dlsch_pdu->mcs,
                            dlsch_pdu->mcs_table,
@@ -3269,7 +3272,7 @@ static void nr_ue_process_rar(NR_UE_MAC_INST_t *mac, nr_downlink_indication_t *d
       rar = (NR_MAC_RAR *) (dlsch_buffer + n_subheaders + (n_subPDUs - 1) * sizeof(NR_MAC_RAR));
       handle_rar_reception(mac, rar, frame, slot);
       if (ra->cfra)
-        nr_ra_succeeded(mac, dl_info->gNB_index, frame, slot);
+        nr_ra_succeeded(mac, frame, slot);
       break;
     }
     if (rarh->E == 0) {
@@ -3791,12 +3794,7 @@ static bool check_ra_contention_resolution(const uint8_t *pdu, const uint8_t *co
   return true;
 }
 
-static int nr_ue_validate_successrar(uint8_t *pduP,
-                                     int32_t pdu_len,
-                                     NR_UE_MAC_INST_t *mac,
-                                     uint8_t gNB_index,
-                                     frame_t frameP,
-                                     int slot)
+static int nr_ue_validate_successrar(uint8_t *pduP, int32_t pdu_len, NR_UE_MAC_INST_t *mac, frame_t frameP, int slot)
 {
   // TS 38.321 - Figure 6.1.5a-1: BI MAC subheader
   // TS 38.321 - Figure 6.1.5a-3: SuccessRAR MAC subheader
@@ -3858,7 +3856,7 @@ static int nr_ue_validate_successrar(uint8_t *pduP,
 
         if (ra->RA_active && ra_success) {
           nr_timer_stop(&ra->response_window_timer);
-          nr_ra_succeeded(mac, gNB_index, frameP, slot);
+          nr_ra_succeeded(mac, frameP, slot);
         } else if (!ra_success) {
           nr_ra_backoff_setting(ra);
         }
@@ -3875,6 +3873,8 @@ static int nr_ue_validate_successrar(uint8_t *pduP,
   set_time_alignment(mac, ta, adjustment_ta, frameP, slot);
   return n;
 }
+
+#define MAX_NUM_DATA_IND 1024
 
 ///////////////////////////////////
 // brief:     nr_ue_process_mac_pdu
@@ -3916,7 +3916,6 @@ static void nr_ue_process_mac_pdu(NR_UE_MAC_INST_t *mac, nr_downlink_indication_
   fapi_nr_pdsch_pdu_t *pdsch_pdu = &(dl_info->rx_ind->rx_indication_body + pdu_id)->pdsch_pdu;
   uint8_t *pduP = pdsch_pdu->pdu;
   int32_t pdu_len = (int32_t)pdsch_pdu->pdu_length;
-  uint8_t gNB_index = dl_info->gNB_index;
   uint8_t CC_id = dl_info->cc_id;
   uint8_t done = 0;
   RA_config_t *ra = &mac->ra;
@@ -3936,10 +3935,13 @@ static void nr_ue_process_mac_pdu(NR_UE_MAC_INST_t *mac, nr_downlink_indication_
         dl_info->rx_ind->number_pdus);
 
   if (ra->ra_type == RA_2_STEP && ra->ra_state == nrRA_WAIT_MSGB) {
-    int n = nr_ue_validate_successrar(pduP, pdu_len, mac, gNB_index, frameP, slot);
+    int n = nr_ue_validate_successrar(pduP, pdu_len, mac, frameP, slot);
     pduP += n;
     pdu_len -= n;
   }
+
+  nr_rlc_data_ind_t data_ind[MAX_NUM_DATA_IND] = {0};
+  int num_data_ind = 0;
 
   while (!done && pdu_len > 0){
     uint16_t mac_len = 0x0000;
@@ -3971,7 +3973,9 @@ static void nr_ue_process_mac_pdu(NR_UE_MAC_INST_t *mac, nr_downlink_indication_
 
         if (mac_len > 0) {
           LOG_DDUMP(NR_MAC, (void *)pduP, mac_subheader_len + mac_len, LOG_DUMP_CHAR, "DL_SCH_LCID_CCCH (e.g. RRCSetup) payload: ");
-          nr_mac_rlc_data_ind(mac->ue_id, mac->ue_id, false, rx_lcid, (char *)(pduP + mac_subheader_len), mac_len);
+          nr_rlc_data_ind_t ind = {.ch = rx_lcid, .buf = pduP + mac_subheader_len, .len = mac_len};
+          data_ind[num_data_ind++] = ind;
+          DevAssert(num_data_ind < MAX_NUM_DATA_IND);
         }
         break;
       case DL_SCH_LCID_TCI_STATE_ACT_UE_SPEC_PDSCH:
@@ -4068,7 +4072,7 @@ static void nr_ue_process_mac_pdu(NR_UE_MAC_INST_t *mac, nr_downlink_indication_
           bool ra_success = check_ra_contention_resolution(&pduP[1], ra->cont_res_id);
 
           if (ra->RA_active && ra_success) {
-            nr_ra_succeeded(mac, gNB_index, frameP, slot);
+            nr_ra_succeeded(mac, frameP, slot);
           } else if (!ra_success) {
             // consider this Contention Resolution not successful and discard the successfully decoded MAC PDU
             nr_ra_contention_resolution_failed(mac);
@@ -4083,15 +4087,20 @@ static void nr_ue_process_mac_pdu(NR_UE_MAC_INST_t *mac, nr_downlink_indication_
         //  MAC SDU
       // From values 1 to 32 it equals to the identity of the logical channel
       case 1 ... 32:
-        if (!get_mac_len(pduP, pdu_len, &mac_len, &mac_subheader_len))
-          return;
+        if (!get_mac_len(pduP, pdu_len, &mac_len, &mac_subheader_len)) {
+          LOG_E(MAC, "get_mac_len(): invalid pdu_len %d (mac_len %d mac_subheader_len %d)\n", pdu_len, mac_len, mac_subheader_len);
+          done = 1;
+          break;
+        }
         // discard the received subPDU if RB is suspended
         if (is_lcid_suspended(mac, rx_lcid)) {
           LOG_W(NR_MAC, "Received PDU for a suspended RB, corresponding to LCID %d. Dropping it.\n", rx_lcid);
           break;
         }
         LOG_D(NR_MAC, "%4d.%2d : DLSCH -> LCID %d %d bytes\n", frameP, slot, rx_lcid, mac_len);
-        nr_mac_rlc_data_ind(mac->ue_id, mac->ue_id, false, rx_lcid, (char *)(pduP + mac_subheader_len), mac_len);
+        nr_rlc_data_ind_t ind = {.ch = rx_lcid, .buf = pduP + mac_subheader_len, .len = mac_len};
+        data_ind[num_data_ind++] = ind;
+        DevAssert(num_data_ind < MAX_NUM_DATA_IND);
         break;
       default:
         LOG_W(MAC, "unknown lcid %02x\n", rx_lcid);
@@ -4099,23 +4108,22 @@ static void nr_ue_process_mac_pdu(NR_UE_MAC_INST_t *mac, nr_downlink_indication_
     }
     pduP += (mac_subheader_len + mac_len);
     pdu_len -= (mac_subheader_len + mac_len);
-    if (pdu_len < 0)
+    if (pdu_len < 0) {
       LOG_E(MAC, "[UE %d][%d.%d] nr_ue_process_mac_pdu, residual mac pdu length %d < 0!\n", mac->ue_id, frameP, slot, pdu_len);
+      done = 1;
+    }
   }
+
+  nr_mac_rlc_data_ind(mac->ue_id, mac->ue_id, false, data_ind, num_data_ind);
 }
 
 /**
  * Function:      generating MAC CEs (MAC CE and subheader) for the ULSCH PDU
  * Parameters:
  * @mac_ce        pointer to the MAC sub-PDUs including the MAC CEs
- * @mac           pointer to the MAC instance
  * Return:        number of written bytes
  */
-int nr_write_ce_ulsch_pdu(uint8_t *mac_ce,
-                          NR_UE_MAC_INST_t *mac,
-                          NR_SINGLE_ENTRY_PHR_MAC_CE *power_headroom,
-                          const type_bsr_t *bsr,
-                          uint8_t *mac_ce_end)
+int nr_write_ce_ulsch_pdu(uint8_t *mac_ce, NR_SINGLE_ENTRY_PHR_MAC_CE *power_headroom, const type_bsr_t *bsr, uint8_t *mac_ce_end)
 {
   uint8_t *pdu = mac_ce;
   if (power_headroom) {
@@ -4208,8 +4216,6 @@ int nr_write_ce_ulsch_pdu(uint8_t *mac_ce,
 
 void nr_ue_send_sdu(NR_UE_MAC_INST_t *mac, nr_downlink_indication_t *dl_info, int pdu_id)
 {
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_UE_SEND_SDU, VCD_FUNCTION_IN);
-
   LOG_D(NR_MAC,
         "In [%d.%d] Handling DLSCH PDU type %d\n",
         dl_info->frame,
@@ -4237,5 +4243,4 @@ void nr_ue_send_sdu(NR_UE_MAC_INST_t *mac, nr_downlink_indication_t *dl_info, in
     default :
       AssertFatal(false, "Invalid DLSCH PDU type\n");
   }
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_UE_SEND_SDU, VCD_FUNCTION_OUT);
 }

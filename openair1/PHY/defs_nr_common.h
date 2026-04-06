@@ -1,40 +1,15 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file PHY/defs_nr_common.h
- \brief Top-level defines and structure definitions
- \author Guy De Souza
- \date 2018
- \version 0.1
- \company Eurecom
- \email: desouza@eurecom.fr
- \note
- \warning
-*/
+/*!
+ * \brief Top-level defines and structure definitions
+ */
 
 #ifndef __PHY_DEFS_NR_COMMON__H__
 #define __PHY_DEFS_NR_COMMON__H__
 
 #include "PHY/impl_defs_top.h"
-#include "nfapi_nr_interface_scf.h"
 #include "impl_defs_nr.h"
 #include "PHY/CODING/nrPolar_tools/nr_polar_defs.h"
 
@@ -42,8 +17,6 @@
 
 #define MAX_NUM_SUBCARRIER_SPACING 5
 #define NR_MAX_OFDM_SYMBOL_SIZE 8192
-
-#define NR_SYMBOLS_PER_SLOT NR_NUMBER_OF_SYMBOLS_PER_SLOT
 
 #define ONE_OVER_SQRT2_Q15 23170
 
@@ -68,8 +41,6 @@
 
 #define NR_MAX_PDCCH_AGG_LEVEL 16 // 3GPP TS 38.211 V15.8 Section 7.3.2 Table 7.3.2.1-1: Supported PDCCH aggregation levels
 
-#define NR_MAX_NB_PORTS 32
-
 #define MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER 36
 
 #define MAX_NUM_NR_ULSCH_SEGMENTS_PER_LAYER 34
@@ -85,6 +56,11 @@
 #define PBCH_MAX_RE_PER_SYMBOL (20 * 12)
 
 #define NR_PUCCH_DMRS_RB 4
+
+typedef enum {
+  NR_NORMAL = 0,
+  NR_EXTENDED = 1
+} nr_prefix_type_t;
 
 typedef enum {
   NR_MU_0=0,
@@ -141,22 +117,20 @@ typedef struct {
   int restricted_set;
   int numerology_index;
   int nb_rx;
-  c16_t rxsigF[NUMBER_OF_NR_RU_PRACH_OCCASIONS_MAX][NB_ANTENNAS_RX][NR_PRACH_SEQ_LEN_L];
   c16_t (*Xu)[839];
   time_stats_t *rx_prach;
+  c16_t (*prach_buf)[NUMBER_OF_NR_RU_PRACH_OCCASIONS_MAX][NR_PRACH_SEQ_LEN_L];
 } prach_item_t;
 
 typedef struct {
   /// prach commands
-  prach_item_t list[NUMBER_OF_NR_PRACH_MAX];
+  prach_item_t *list[NUMBER_OF_NR_PRACH_MAX];
   /// mutex for prach_list access
   pthread_mutex_t prach_list_mutex;
 } prach_list_t;
 void init_prach_list(prach_list_t *);
 
-typedef struct NR_DL_FRAME_PARMS NR_DL_FRAME_PARMS;
-
-struct NR_DL_FRAME_PARMS {
+typedef struct NR_DL_FRAME_PARMS_s {
   /// frequency range
   frequency_range_t freq_range;
   //  /// Placeholder to replace overlapping fields below
@@ -173,8 +147,6 @@ struct NR_DL_FRAME_PARMS {
   uint8_t N_RBG;
   /// Total Number of Resource Block Groups SubSets: this is P
   uint8_t N_RBGS;
-  /// NR Band
-  uint16_t nr_band;
   /// DL carrier frequency
   uint64_t dl_CarrierFreq;
   /// UL carrier frequency
@@ -232,7 +204,7 @@ struct NR_DL_FRAME_PARMS {
   /// Number of common transmit antenna ports in eNodeB (1 or 2)
   uint8_t nb_antenna_ports_gNB;
   /// Cyclic Prefix for DL (0=Normal CP, 1=Extended CP)
-  lte_prefix_type_t Ncp;
+  nr_prefix_type_t Ncp;
   /// sequence which is computed based on carrier frequency and numerology to rotate/derotate each OFDM symbol according to Section 5.3 in 38.211
   /// First dimension is for the direction of the link (0 DL, 1 UL, 2 SL)
   c16_t symbol_rotation[3][224];
@@ -269,7 +241,7 @@ struct NR_DL_FRAME_PARMS {
   uint16_t tdd_slot_config;
   uint8_t tdd_period;
   bool print_ue_help_cmdline_log;
-};
+} NR_DL_FRAME_PARMS;
 
 // PRS config structures
 typedef struct {
@@ -304,6 +276,29 @@ typedef struct {
     float rsrp_dBm;
     int32_t reserved;
 } prs_meas_t;
+
+// Configuration parameters required for 5G Positioning
+// TRP Cartesian Coordinate information
+typedef struct trp_s {
+  // TRP id
+  uint32_t id;
+  // TRP x-axis value
+  uint32_t x_axis;
+  // TRP y-axis value
+  uint32_t y_axis;
+  // TRP z-axis value
+  uint32_t z_axis;
+  // 0 = mm, 1 = cm, 2 = dm
+  uint8_t unit;
+} trp_t;
+
+#define MAX_NUM_TRPs 8
+typedef struct {
+  trp_t trps[MAX_NUM_TRPs];
+  uint8_t num_trp;
+  // Serving gNB indicator
+  bool is_serving_gNB;
+} positioning_config_t;
 
 // rel16 prs k_prime table as per ts138.211 sec.7.4.1.7.2
 #define K_PRIME_TABLE_ROW_SIZE 4

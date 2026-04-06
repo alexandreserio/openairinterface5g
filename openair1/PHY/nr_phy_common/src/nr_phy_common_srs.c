@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "PHY/nr_phy_common/inc/nr_phy_common.h"
@@ -30,18 +13,18 @@ static const uint16_t srs_max_number_cs[3] = {8, 12, 6};
 
 //#define SRS_DEBUG
 
-static int group_number_hopping(int slot_number, uint8_t n_ID_SRS, uint8_t l0, uint8_t l_line)
+static int group_number_hopping(int slot_number, uint8_t n_ID_SRS, uint8_t l0, uint8_t l_line, int symb_slot)
 {
   // Pseudo-random sequence c(i) defined by TS 38.211 - Section 5.2.1
   uint32_t cinit = n_ID_SRS;
-  uint8_t c_last_index = 8 * (slot_number * NR_SYMBOLS_PER_SLOT + l0 + l_line) + 7;
+  uint8_t c_last_index = 8 * (slot_number * symb_slot + l0 + l_line) + 7;
   uint32_t *c_sequence =  calloc(c_last_index + 1, sizeof(uint32_t));
   pseudo_random_sequence(c_last_index + 1, c_sequence, cinit);
 
   // TS 38.211 - 6.4.1.4.2 Sequence generation
   uint32_t f_gh = 0;
   for (int m = 0; m <= 7; m++) {
-    f_gh += c_sequence[8 * (slot_number * NR_SYMBOLS_PER_SLOT + l0 + l_line) + m] << m;
+    f_gh += c_sequence[8 * (slot_number * symb_slot + l0 + l_line) + m] << m;
   }
   f_gh = f_gh % 30;
   int u = (f_gh + n_ID_SRS) % U_GROUP_NUMBER;
@@ -49,13 +32,13 @@ static int group_number_hopping(int slot_number, uint8_t n_ID_SRS, uint8_t l0, u
   return u;
 }
 
-static int sequence_number_hopping(int slot_number, uint8_t n_ID_SRS, uint16_t M_sc_b_SRS, uint8_t l0, uint8_t l_line)
+static int sequence_number_hopping(int slot_number, int n_ID_SRS, int M_sc_b_SRS, int l0, int l_line, int symb_slot)
 {
   int v = 0;
   if (M_sc_b_SRS > 6 * NR_NB_SC_PER_RB) {
     // Pseudo-random sequence c(i) defined by TS 38.211 - Section 5.2.1
     uint32_t cinit = n_ID_SRS;
-    uint8_t c_last_index = (slot_number * NR_SYMBOLS_PER_SLOT + l0 + l_line);
+    uint8_t c_last_index = (slot_number * symb_slot + l0 + l_line);
     uint32_t *c_sequence =  calloc(c_last_index + 1, sizeof(uint32_t));
     pseudo_random_sequence(c_last_index + 1,  c_sequence, cinit);
     // TS 38.211 - 6.4.1.4.2 Sequence generation
@@ -255,12 +238,12 @@ bool generate_srs_nr(const NR_DL_FRAME_PARMS *frame_parms,
           v = 0;
           break;
         case groupHopping:
-          u = group_number_hopping(slot_number, nr_srs_info->n_ID_SRS, l0, l_line);
+          u = group_number_hopping(slot_number, nr_srs_info->n_ID_SRS, l0, l_line, frame_parms->symbols_per_slot);
           v = 0;
           break;
         case sequenceHopping:
           u = nr_srs_info->n_ID_SRS % U_GROUP_NUMBER;
-          v = sequence_number_hopping(slot_number, nr_srs_info->n_ID_SRS, M_sc_b_SRS, l0, l_line);
+          v = sequence_number_hopping(slot_number, nr_srs_info->n_ID_SRS, M_sc_b_SRS, l0, l_line, frame_parms->symbols_per_slot);
           break;
         default:
           LOG_E(NR_PHY, "generate_srs: unknown hopping setting %d !\n", nr_srs_info->groupOrSequenceHopping);

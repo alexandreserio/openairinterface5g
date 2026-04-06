@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 /***********************************************************************
@@ -281,7 +264,6 @@ static int nr_csi_rs_channel_estimation(
     int16_t *log2_maxh,
     uint32_t *noise_power)
 {
-  const int dataF_offset = proc->nr_slot_rx * fp->samples_per_slot_wCP;
   *noise_power = 0;
   int maxh = 0;
   int count = 0;
@@ -316,7 +298,7 @@ static int nr_csi_rs_channel_estimation(
             for (int lp = 0; lp <= csi_mapping->lprime; lp++) {
               uint16_t symb = lp + csi_mapping->loverline[cdm_id];
               uint64_t symbol_offset = symb * fp->ofdm_symbol_size;
-              const c16_t *tx_csi_rs_signal = &csi_rs_generated_signal[port_tx][symbol_offset+dataF_offset];
+              const c16_t *tx_csi_rs_signal = &csi_rs_generated_signal[port_tx][symbol_offset];
               const c16_t *rx_csi_rs_signal = &csi_rs_received_signal[ant_rx][symbol_offset];
               c16_t tmp = c16MulConjShift(tx_csi_rs_signal[k], rx_csi_rs_signal[k], nr_csi_info->csi_rs_generated_signal_bits);
               // This is not just the LS estimation for each (k,l), but also the sum of the different contributions
@@ -330,7 +312,7 @@ static int nr_csi_rs_channel_estimation(
     }
 
 #ifdef NR_CSIRS_DEBUG
-    for(int symb = 0; symb < NR_SYMBOLS_PER_SLOT; symb++) {
+    for(int symb = 0; symb < fp->symbols_per_slot; symb++) {
       if(!is_csi_rs_in_symbol(*csirs_config_pdu,symb)) {
         continue;
       }
@@ -581,7 +563,7 @@ int nr_csi_rs_pmi_estimation(const PHY_VARS_NR_UE *ue,
                              const int16_t log2_re,
                              uint8_t *i1,
                              uint8_t *i2,
-                             uint32_t *precoded_sinr_dB)
+                             int32_t *precoded_sinr_dB)
 {
   const NR_DL_FRAME_PARMS *frame_parms = &ue->frame_parms;
 
@@ -730,7 +712,6 @@ int nr_csi_rs_cqi_estimation(const uint32_t precoded_sinr,
 }
 
 static void nr_csi_im_power_estimation(const PHY_VARS_NR_UE *ue,
-                                       const UE_nr_rxtx_proc_t *proc,
                                        const fapi_nr_dl_config_csiim_pdu_rel15_t *csiim_config_pdu,
                                        uint32_t *interference_plus_noise_power,
                                        const c16_t rxdataF[][ue->frame_parms.samples_per_slot_wCP])
@@ -822,7 +803,7 @@ void nr_ue_csi_im_procedures(PHY_VARS_NR_UE *ue,
   LOG_I(NR_PHY, "csiim_config_pdu->l_csiim = %i.%i.%i.%i\n", csiim_config_pdu->l_csiim[0], csiim_config_pdu->l_csiim[1], csiim_config_pdu->l_csiim[2], csiim_config_pdu->l_csiim[3]);
 #endif
 
-  nr_csi_im_power_estimation(ue, proc, csiim_config_pdu, &ue->nr_csi_info->interference_plus_noise_power, rxdataF);
+  nr_csi_im_power_estimation(ue, csiim_config_pdu, &ue->nr_csi_info->interference_plus_noise_power, rxdataF);
   ue->nr_csi_info->csi_im_meas_computed = true;
 }
 
@@ -948,7 +929,7 @@ void nr_ue_csi_rs_procedures(PHY_VARS_NR_UE *ue,
   uint8_t i1[3] = {0};
   uint8_t i2[1] = {0};
   uint8_t cqi = 0;
-  uint32_t precoded_sinr_dB = 0;
+  int32_t precoded_sinr_dB = 0;
   // bit 3 in bitmap to indicate RI measurment
   if (csirs_config_pdu->measurement_bitmap & 8) {
     nr_csi_rs_pmi_estimation(ue,

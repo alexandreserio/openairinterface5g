@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+
 # OpenAirInterface documentation overview
 
 This is the general overview page of the OpenAirInterface documentation.
@@ -44,6 +46,7 @@ There is some general information in the [OpenAirInterface Gitlab Wiki](https://
 - [How to run a 4G setup using L1 simulator](./L1SIM.md) _Note: we recommend the RFsimulator_
 - [How to use the L2 simulator](./L2NFAPI.md)
 - [How to use the OAI channel simulator](../openair1/SIMULATION/TOOLS/DOC/channel_simulation.md)
+- [How to use GPU-accelerated channel simulation](../openair1/SIMULATION/TOOLS/DOC/gpu_acceleration.md)
 - [How to use multiple BWPs](./RUN_NR_multiple_BWPs.md)
 - [How to run OAI-VNF and OAI-PNF](./nfapi.md): how to run the FAPI/nFAPI split,
   including some general remarks on FAPI/nFAPI.
@@ -103,7 +106,7 @@ Some directories under `radio` contain READMEs:
 
 - [RFsimulator](../radio/rfsimulator/README.md)
 - [USRP](../radio/USRP/README.md)
-- [BladeRF](../radio/BLADERF/README)
+- [BladeRF](../radio/BLADERF/README.md)
 - [IQPlayer](../radio/iqplayer/DOC/iqrecordplayer_usage.md), and [general documentation](./iqrecordplayer_usage.md)
 - [fhi_72](../radio/fhi_72/README.md)
 - [vrtsim](../radio/vrtsim/README.md)
@@ -120,8 +123,10 @@ The other SDRs (AW2S, LimeSDR, ...) have no READMEs.
 ## Testing
 
 - [UnitTests.md](./UnitTests.md) explains the unit testing setup
-- Component tests are under `tests/`. Currently, there is a simple CU-UP
-  tester, see the corresponding [README.md](../tests/nr-cuup/README.md).
+- Component tests are under `tests/`. Currently, the following component tests are supported
+  - A simple CU-UP tester, see the corresponding [README.md](../tests/nr-cuup/README.md).
+  - A CU-NRPPA tester, see the corresponding [README.md](../tests/nr-cu-nrppa/README.md).
+  - A UE NAS tester, see the corresponding [README.md](../tests/nr-ue-nas-simulator/README.md).
 - [TESTBenches.md](./TESTBenches.md) lists the CI setup and links to pipelines
 - The CI setup uses a [custom framework](../ci-scripts/README.md) to run
   end-to-end tests.

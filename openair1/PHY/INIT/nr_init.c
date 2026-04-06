@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 #include "executables/softmodem-common.h"
@@ -185,7 +168,7 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
   for (int i = 0; i < common_vars->num_beams_period; i++) {
     common_vars->txdataF[i] = (c16_t**)malloc16_clear(Ptx * sizeof(c16_t*));
     for (int j = 0; j < Ptx; j++)
-      common_vars->txdataF[i][j] = (c16_t*)malloc16_clear(fp->samples_per_frame_wCP * sizeof(c16_t));
+      common_vars->txdataF[i][j] = (c16_t*)malloc16_clear(fp->samples_per_slot_wCP * sizeof(c16_t));
   }
   common_vars->debugBuff = (int32_t*)malloc16_clear(fp->samples_per_frame*sizeof(int32_t)*100);	
   common_vars->debugBuff_sample_offset = 0; 
@@ -204,11 +187,11 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
     NR_gNB_PUSCH *pusch = &gNB->pusch_vars[ULSCH_id];
     pusch->ul_ch_estimates = (int32_t **)malloc16(n_buf * sizeof(int32_t *));
     pusch->ptrs_phase_per_slot = (int32_t **)malloc16(n_buf * sizeof(int32_t *));
-    pusch->rxdataF_comp = (int32_t **)malloc16(n_buf * sizeof(int32_t *));
+    pusch->rxdataF_comp = (c16_t **)malloc16(n_buf * sizeof(*pusch->rxdataF_comp));
     for (int i = 0; i < n_buf; i++) {
       pusch->ul_ch_estimates[i] = (int32_t *)malloc16_clear(sizeof(int32_t) * fp->ofdm_symbol_size * fp->symbols_per_slot);
       pusch->ptrs_phase_per_slot[i] = (int32_t *)malloc16_clear(sizeof(int32_t) * fp->symbols_per_slot); // symbols per slot
-      pusch->rxdataF_comp[i] = (int32_t *)malloc16_clear(sizeof(int32_t) * nb_re_pusch2 * fp->symbols_per_slot);
+      pusch->rxdataF_comp[i] = (c16_t *)malloc16_clear(sizeof(**pusch->rxdataF_comp) * nb_re_pusch2 * fp->symbols_per_slot);
     }
 
     for (int i = 0; i < max_ul_mimo_layers; i++) {
@@ -313,31 +296,32 @@ void nr_phy_config_request_sim(PHY_VARS_gNB *gNB,
   gNB_config->carrier_config.num_tx_ant.value           = fp->nb_antennas_tx;
   gNB_config->carrier_config.num_rx_ant.value           = fp->nb_antennas_rx;
 
+  int nr_band = 78;
   switch (mu) {
     case 0:
       gNB->gNB_config.tdd_table.tdd_period.value = 7;
       fp->dl_CarrierFreq = 2600000000;
       fp->ul_CarrierFreq = 2600000000;
-      fp->nr_band = 38;
+      nr_band = 38;
       break;
     case 1:
       gNB->gNB_config.tdd_table.tdd_period.value = 6;
       fp->dl_CarrierFreq = 3600000000;
       fp->ul_CarrierFreq = 3600000000;
-      fp->nr_band = 78;
+      nr_band = 78;
       break;
     case 3:
       gNB->gNB_config.tdd_table.tdd_period.value = 3;
       fp->dl_CarrierFreq = 27524520000;
       fp->ul_CarrierFreq = 27524520000;
-      fp->nr_band = 261;
+      nr_band = 261;
       break;
     default:
       printf("unsupported numerology %d\n", mu);
       exit(-1);
   }
 
-  frequency_range_t frequency_range = get_freq_range_from_band(fp->nr_band);
+  frequency_range_t frequency_range = get_freq_range_from_band(nr_band);
   int bw_index = get_supported_band_index(mu, frequency_range, N_RB_DL);
   gNB_config->carrier_config.dl_bandwidth.value = get_supported_bw_mhz(frequency_range, bw_index);
 
@@ -366,9 +350,8 @@ void nr_phy_config_request(NR_PHY_Config_t *phy_config)
   fp->ul_CarrierFreq = ((ul_bw_khz>>1) + gNB_config->carrier_config.uplink_frequency.value)*1000 ;
 
   int32_t dlul_offset = fp->ul_CarrierFreq - fp->dl_CarrierFreq;
-  fp->nr_band = get_band(fp->dl_CarrierFreq, dlul_offset, dl_bw_khz, ul_bw_khz);
 
-  LOG_I(PHY, "DL frequency %lu Hz, UL frequency %lu Hz: band %d, uldl offset %d Hz\n", fp->dl_CarrierFreq, fp->ul_CarrierFreq, fp->nr_band, dlul_offset);
+  LOG_I(PHY, "DL frequency %lu Hz, UL frequency %lu Hz: uldl offset %d Hz\n", fp->dl_CarrierFreq, fp->ul_CarrierFreq, dlul_offset);
 
   fp->threequarter_fs = get_softmodem_params()->threequarter_fs;
   LOG_D(PHY,"Configuring MIB for instance %d, : (Nid_cell %d,DL freq %llu, UL freq %llu)\n",
@@ -435,8 +418,8 @@ void init_nr_transport(PHY_VARS_gNB *gNB)
                             fp->slots_per_frame;
   int nb_ul_slots_period = 0;
   if (cfg->cell_config.frame_duplex_type.value) {
-    for(int i=0; i<nb_slots_per_period; i++) {
-      for(int j=0; j<NR_NUMBER_OF_SYMBOLS_PER_SLOT; j++) {
+    for(int i = 0; i < nb_slots_per_period; i++) {
+      for(int j = 0; j < fp->symbols_per_slot; j++) {
         if(cfg->tdd_table.max_tdd_periodicity_list[i].max_num_of_symbol_per_slot_list[j].slot_config.value == 1) { // UL symbol
           nb_ul_slots_period++;
           break;

@@ -1,22 +1,5 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
 
@@ -60,7 +43,6 @@ unsigned short config_frames[4] = {2,9,11,13};
 #endif
 #include "common/utils/LOG/log.h"
 #include "common/utils/time_manager/time_manager.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 
 #include "UTIL/OPT/opt.h"
 #include "LAYER2/nr_pdcp/nr_pdcp_oai_api.h"
@@ -104,7 +86,7 @@ RAN_CONTEXT_t RC;
 int oai_exit = 0;
 
 uint64_t        downlink_frequency[MAX_NUM_CCs][4];
-int32_t         uplink_frequency_offset[MAX_NUM_CCs][4];
+int64_t         uplink_frequency_offset[MAX_NUM_CCs][4];
 uint64_t        sidelink_frequency[MAX_NUM_CCs][4];
 
 // UE and OAI config variables
@@ -166,8 +148,6 @@ static void get_options(configmodule_interface_t *cfg)
   paramdef_t cmdline_params[] = CMDLINE_NRUEPARAMS_DESC;
   int numparams = sizeofArray(cmdline_params);
   config_get(cfg, cmdline_params, numparams, NULL);
-  if (nrUE_params.vcdflag > 0)
-    ouput_vcd = 1;
   AssertFatal(nrUE_params.extra_pdu_id == -1,
               "Add additional PDU sessions in uicc.pdu_sessions array instead\n");
 }
@@ -243,6 +223,13 @@ static void trigger_deregistration(int sig)
   }
 }
 
+void *nrue_ru_start_thread(void *arg)
+{
+  (void)arg;
+  nrue_ru_start();
+  return NULL;
+}
+
 int NB_UE_INST = 1;
 configmodule_interface_t *uniqCfg = NULL;
 nrLDPC_coding_interface_t nrLDPC_coding_interface = {0};
@@ -251,7 +238,7 @@ int main(int argc, char **argv)
 {
   start_background_system();
 
-  if ((uniqCfg = load_configmodule(argc, argv, CONFIG_ENABLECMDLINEONLY)) == NULL) {
+  if ((uniqCfg = load_configmodule(argc, argv, CONFIG_ENABLECMDLINEONLY)) == NULL || CONFIG_ISFLAGSET(CONFIG_ABORT)) {
     exit_fun("[SOFTMODEM] Error, configuration module init failed\n");
   }
   //set_softmodem_sighandler();
@@ -285,9 +272,6 @@ int main(int argc, char **argv)
   int ret_loader = load_nrLDPC_coding_interface(NULL, &nrLDPC_coding_interface);
   AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
-  if (ouput_vcd) {
-    vcd_signal_dumper_init("/tmp/openair_dump_nrUE.vcd");
-  }
   // strdup to put the sring in the core file for post mortem identification
   char *pckg = strdup(OAI_PACKAGE_VERSION);
   LOG_I(HW, "Version: %s\n", pckg);
@@ -391,7 +375,7 @@ int main(int argc, char **argv)
         fapi_nr_config_request_t *nrUE_config = &UE_CC->nrUE_config;
         nr_init_frame_parms_ue(fp, nrUE_config, mac->nr_band);
 
-        cell.band = fp->nr_band;
+        cell.band = mac->nr_band;
         cell.rf_frequency = fp->dl_CarrierFreq;
         cell.rf_freq_offset = fp->ul_CarrierFreq - fp->dl_CarrierFreq;
         cell.numerology = fp->numerology_index;
@@ -456,7 +440,11 @@ int main(int argc, char **argv)
     load_module_shlib("imscope_record", NULL, 0, PHY_vars_UE_g[0][0]);
   }
 
-  nrue_ru_start();
+  // Launch a temporary high-priority thread to start the UE RU, ensuring radio library threads inherit this priority
+  pthread_t ru_start_thread;
+  threadCreate(&ru_start_thread, nrue_ru_start_thread, NULL, "ru_start_thread", -1, OAI_PRIORITY_RT_MAX);
+  int ret = pthread_join(ru_start_thread, NULL);
+  AssertFatal(ret == 0, "pthread_join error %d, errno %d (%s)\n", ret, errno, strerror(errno));
 
   for (int inst = 0; inst < NB_UE_INST; inst++) {
     LOG_I(PHY,"Intializing UE Threads for instance %d ...\n", inst);
@@ -478,9 +466,6 @@ int main(int argc, char **argv)
   itti_wait_tasks_end(trigger_deregistration);
   LOG_W(NR_PHY, "Returned from ITTI signal handler\n");
   oai_exit = 1;
-
-  if (ouput_vcd)
-    vcd_signal_dumper_close();
 
   if (PHY_vars_UE_g && PHY_vars_UE_g[0]) {
     for (int CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {
@@ -509,6 +494,7 @@ int main(int argc, char **argv)
   time_manager_finish();
 
   free(pckg);
+  printf("Bye.\n");
   return 0;
 }
 

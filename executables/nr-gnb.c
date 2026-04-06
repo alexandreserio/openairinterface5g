@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/*! \file nr-gnb.c
+/*!
  * \brief Top-level threads for gNodeB
- * \author R. Knopp, F. Kaltenberger, Navid Nikaein
- * \date 2012
- * \version 0.1
- * \company Eurecom
- * \email: knopp@eurecom.fr,florian.kaltenberger@eurecom.fr, navid.nikaein@eurecom.fr
- * \note
- * \warning
  */
 
 #define _GNU_SOURCE
@@ -51,7 +27,6 @@
 #include "PHY/NR_TRANSPORT/nr_transport_proto.h"
 #include "PHY/TOOLS/tools_defs.h"
 #include "PHY/defs_RU.h"
-#include "PHY/defs_common.h"
 #include "PHY/defs_gNB.h"
 #include "PHY/defs_nr_common.h"
 #include "PHY/impl_defs_nr.h"
@@ -121,13 +96,7 @@ static void tx_func(processingData_L1tx_t *info)
   if (tx_slot_type == NR_DOWNLINK_SLOT || tx_slot_type == NR_MIXED_SLOT || get_softmodem_params()->continuous_tx
       || IS_SOFTMODEM_RFSIM || cfg->analog_beamforming_ve.analog_bf_vendor_ext.value) {
     start_meas(&info->gNB->phy_proc_tx);
-    phy_procedures_gNB_TX(info->gNB,
-                          &sched_response.DL_req,
-                          &sched_response.TX_req,
-                          &sched_response.UL_dci_req,
-                          frame_tx,
-                          slot_tx,
-                          1);
+    phy_procedures_gNB_TX(info->gNB, &sched_response.DL_req, &sched_response.TX_req, &sched_response.UL_dci_req, frame_tx,slot_tx);
 
     PHY_VARS_gNB *gNB = info->gNB;
     processingData_RU_t syncMsgRU;
@@ -200,7 +169,7 @@ static void rx_func(processingData_L1_t *info)
       int soffset = (slot_rx % RU_RX_SLOT_DEPTH) * gNB->frame_parms.symbols_per_slot * gNB->frame_parms.ofdm_symbol_size;
       for (int bb = 0; bb < gNB->common_vars.num_beams_period; bb++) {
         for (int aa = 0; aa < gNB->frame_parms.nb_antennas_rx; aa++) {
-          const uint max_symb = (gNB->frame_parms.Ncp == EXTENDED) ? 12 : 14;
+          const uint max_symb = (gNB->frame_parms.Ncp == NR_EXTENDED) ? 12 : 14;
           for (int sym = 0; sym < max_symb; sym++)
             apply_nr_rotation_symbol_RX(&gNB->frame_parms,
                                         gNB->common_vars.rxdataF[bb][aa] + soffset + sym * gNB->frame_parms.ofdm_symbol_size,

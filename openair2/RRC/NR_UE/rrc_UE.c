@@ -1,33 +1,9 @@
 /*
- * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The OpenAirInterface Software Alliance licenses this file to You under
- * the OAI Public License, Version 1.1  (the "License"); you may not use this file
- * except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.openairinterface.org/?page_id=698
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *-------------------------------------------------------------------------------
- * For more information about the OpenAirInterface (OAI) Software Alliance:
- *      contact@openairinterface.org
+ * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-/* \file rrc_UE.c
+/*
  * \brief RRC procedures
- * \author R. Knopp, K.H. HSU
- * \date 2018
- * \version 0.1
- * \company Eurecom / NTUST
- * \email: knopp@eurecom.fr, kai-hsiang.hsu@eurecom.fr
- * \note
- * \warning
  */
 
 #define RRC_UE
@@ -61,7 +37,6 @@
 #include "openair3/SECU/key_nas_deriver.h"
 
 #include "common/utils/LOG/log.h"
-#include "common/utils/LOG/vcd_signal_dumper.h"
 
 #ifndef CELLULAR
   #include "RRC/NR/MESSAGES/asn1_msg.h"
@@ -294,8 +269,6 @@ static void nr_rrc_process_ntnconfig(NR_UE_RRC_INST_t *rrc, NR_UE_RRC_SI_INFO *S
 
 static void nr_decode_SI(NR_UE_RRC_SI_INFO *SI_info, NR_SystemInformation_t *si, NR_UE_RRC_INST_t *rrc, int hfn, int frame)
 {
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_RRC_UE_DECODE_SI, VCD_FUNCTION_IN);
-
   // Dump contents
   if (si->criticalExtensions.present == NR_SystemInformation__criticalExtensions_PR_systemInformation
       || si->criticalExtensions.present == NR_SystemInformation__criticalExtensions_PR_criticalExtensionsFuture_r16) {
@@ -386,7 +359,6 @@ static void nr_decode_SI(NR_UE_RRC_SI_INFO *SI_info, NR_SystemInformation_t *si,
     sib19_msg->can_start_ra = rrc->is_NTN_UE;
     nr_rrc_send_msg_to_mac(rrc, &rrc_msg);
   }
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_RRC_UE_DECODE_SI, VCD_FUNCTION_OUT);
 }
 
 static void nr_rrc_ue_prepare_RRCSetupRequest(NR_UE_RRC_INST_t *rrc)
@@ -490,6 +462,30 @@ static void nr_rrc_process_sib1(NR_UE_RRC_INST_t *rrc, NR_UE_RRC_SI_INFO *SI_inf
   if(g_log->log_component[NR_RRC].level >= OAILOG_DEBUG)
     xer_fprint(stdout, &asn_DEF_NR_SIB1, (const void *) sib1);
   LOG_A(NR_RRC, "SIB1 decoded\n");
+
+  plmn_id_t *plmn_id = malloc_or_fail(sizeof(plmn_id_t));
+
+  /* selected_plmn_identity is one-indexed */
+  AssertFatal(rrc->selected_plmn_identity > 0, "No PLMN selected");
+  /* only one PLMN info block is currently supported*/
+  NR_PLMN_Identity_t *plmn = sib1->cellAccessRelatedInfo.plmn_IdentityInfoList.list.array[0]
+                                 ->plmn_IdentityList.list.array[rrc->selected_plmn_identity - 1];
+
+  /* Convert MCC */
+  plmn_id->mcc = (*plmn->mcc->list.array[0]) * 100 + (*plmn->mcc->list.array[1]) * 10 + (*plmn->mcc->list.array[2]);
+
+  plmn_id->mnc_digit_length = plmn->mnc.list.count;
+
+  /* Convert MNC (2 or 3 digits) */
+  if (plmn->mnc.list.count == 3) {
+    plmn_id->mnc = (*plmn->mnc.list.array[0]) * 100 + (*plmn->mnc.list.array[1]) * 10 + (*plmn->mnc.list.array[2]);
+  } else {
+    plmn_id->mnc = (*plmn->mnc.list.array[0]) * 10 + (*plmn->mnc.list.array[1]);
+  }
+
+  nr_ue_nas_t *nas = get_ue_nas_info(rrc->ue_id);
+  nas->sn_id = plmn_id;
+
   nr_timer_start(&SI_info->sib1_timer);
   SI_info->sib1_validity = true;
   if (rrc->nrRrcState == RRC_STATE_IDLE_NR) {
@@ -1006,8 +1002,14 @@ static void nr_rrc_process_reconfigurationWithSync(NR_UE_RRC_INST_t *rrc,
   }
 }
 
-static void nr_rrc_cellgroup_configuration(NR_UE_RRC_INST_t *rrc, NR_CellGroupConfig_t *cgConfig, int gNB_index, bool dedicatedsib1)
+static bool nr_rrc_cellgroup_configuration(NR_UE_RRC_INST_t *rrc, NR_CellGroupConfig_t *cgConfig, int gNB_index, bool dedicatedsib1)
 {
+  if (!check_cellgroup_config(cgConfig)) {
+    // if we received a configuration not supported or with some wrong combination
+    // we call the function for RLF (re-establishment if security is activated, going to IDLE otherwise)
+    handle_rlf_detection(rrc);
+    return false;
+  }
   NR_SpCellConfig_t *spCellConfig = cgConfig->spCellConfig;
   if(spCellConfig) {
     NR_ServingCellConfig_t *spCellConfigDedicated = spCellConfig->spCellConfigDedicated;
@@ -1059,14 +1061,10 @@ static void nr_rrc_cellgroup_configuration(NR_UE_RRC_INST_t *rrc, NR_CellGroupCo
   }
 
   nr_rrc_manage_rlc_bearers(rrc, cgConfig);
-
-  if (cgConfig->ext1)
-    AssertFatal(cgConfig->ext1->reportUplinkTxDirectCurrent == NULL, "Reporting of UplinkTxDirectCurrent not implemented\n");
-  AssertFatal(cgConfig->sCellToReleaseList == NULL, "Secondary serving cell release not implemented\n");
-  AssertFatal(cgConfig->sCellToAddModList == NULL, "Secondary serving cell addition not implemented\n");
+  return true;
 }
 
-static void nr_rrc_ue_process_masterCellGroup(NR_UE_RRC_INST_t *rrc,
+static bool nr_rrc_ue_process_masterCellGroup(NR_UE_RRC_INST_t *rrc,
                                               OCTET_STRING_t *masterCellGroup,
                                               long *fullConfig,
                                               int gNB_index)
@@ -1080,13 +1078,18 @@ static void nr_rrc_ue_process_masterCellGroup(NR_UE_RRC_INST_t *rrc,
                                         masterCellGroup->size, 0, 0);
   if ((dec_rval.code != RC_OK) && (dec_rval.consumed == 0)) {
     LOG_E(NR_RRC, "CellGroupConfig decode error\n");
-    return;
+    // if the ASN1 decoding fails for the received CellGroup configuration
+    // we call the function for RLF (re-establishment if security is activated, going to IDLE otherwise)
+    handle_rlf_detection(rrc);
+    return false;
   }
   if (LOG_DEBUGFLAG(DEBUG_ASN1)) {
     xer_fprint(stdout, &asn_DEF_NR_CellGroupConfig, (const void *) cellGroupConfig);
   }
 
-  nr_rrc_cellgroup_configuration(rrc, cellGroupConfig, gNB_index, false);
+  bool ret = nr_rrc_cellgroup_configuration(rrc, cellGroupConfig, gNB_index, false);
+  if (!ret)
+    return false;
 
   LOG_D(RRC, "Sending CellGroupConfig to MAC the pointer will be managed by mac\n");
   nr_mac_rrc_message_t rrc_msg = {0};
@@ -1097,6 +1100,7 @@ static void nr_rrc_ue_process_masterCellGroup(NR_UE_RRC_INST_t *rrc,
   mac_msg->hfn = rrc->current_hfn;
   mac_msg->frame = rrc->current_frame;
   nr_rrc_send_msg_to_mac(rrc, &rrc_msg);
+  return true;
 }
 
 static bool nr_rrc_process_reconfiguration_v1530(NR_UE_RRC_INST_t *rrc, NR_RRCReconfiguration_v1530_IEs_t *rec_1530, int gNB_index)
@@ -1105,8 +1109,11 @@ static bool nr_rrc_process_reconfiguration_v1530(NR_UE_RRC_INST_t *rrc, NR_RRCRe
     // TODO perform the full configuration procedure as specified in 5.3.5.11 of 331
     LOG_E(NR_RRC, "RRCReconfiguration includes fullConfig but this is not implemented yet\n");
   }
-  if (rec_1530->masterCellGroup)
-    nr_rrc_ue_process_masterCellGroup(rrc, rec_1530->masterCellGroup, rec_1530->fullConfig, gNB_index);
+  if (rec_1530->masterCellGroup) {
+    bool ret = nr_rrc_ue_process_masterCellGroup(rrc, rec_1530->masterCellGroup, rec_1530->fullConfig, gNB_index);
+    if (!ret)
+      return false;
+  }
   if (rec_1530->masterKeyUpdate) {
     as_security_key_update(rrc, rec_1530->masterKeyUpdate);
     nr_pdcp_entity_security_keys_and_algos_t sp = get_security_rrc_parameters(rrc, true);
@@ -1544,11 +1551,15 @@ static void nr_rrc_ue_process_rrcReconfiguration(NR_UE_RRC_INST_t *rrc, int gNB_
           LOG_E(NR_RRC, "\n");
           // free the memory
           SEQUENCE_free(&asn_DEF_NR_CellGroupConfig, (void *)cellGroupConfig, 1);
+          // if the ASN1 decoding fails for the received CellGroup configuration
+          // we call the function for RLF (re-establishment if security is activated, going to IDLE otherwise)
+          handle_rlf_detection(rrc);
         } else {
           if (LOG_DEBUGFLAG(DEBUG_ASN1))
             xer_fprint(stdout, &asn_DEF_NR_CellGroupConfig, (const void *) cellGroupConfig);
 
-          nr_rrc_cellgroup_configuration(rrc, cellGroupConfig, gNB_index, dedicatedsib1);
+          bool ret = nr_rrc_cellgroup_configuration(rrc, cellGroupConfig, gNB_index, dedicatedsib1);
+          AssertFatal(ret, "CellGroup has wrong configuration for the UE. Unexpected\n");
           AssertFatal(!IS_SA_MODE(get_softmodem_params()), "secondaryCellGroup only used in NSA for now\n");
           nr_mac_rrc_message_t rrc_msg = {0};
           rrc_msg.payload_type = NR_MAC_RRC_CONFIG_CG;
@@ -2014,7 +2025,6 @@ static void nr_rrc_ue_decode_NR_BCCH_DL_SCH_Message(NR_UE_RRC_INST_t *rrc,
   if (Sdu_len == 0) // decoding failed in L2
     return;
 
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_UE_DECODE_BCCH, VCD_FUNCTION_IN);
   NR_BCCH_DL_SCH_Message_t *bcch_message = NULL;
   asn_dec_rval_t dec_rval = uper_decode_complete(NULL,
                                                  &asn_DEF_NR_BCCH_DL_SCH_Message,
@@ -2027,7 +2037,6 @@ static void nr_rrc_ue_decode_NR_BCCH_DL_SCH_Message(NR_UE_RRC_INST_t *rrc,
     log_dump(NR_RRC, Sdu, Sdu_len, LOG_DUMP_CHAR,"   Received bytes:\n");
     // free the memory
     SEQUENCE_free(&asn_DEF_NR_BCCH_DL_SCH_Message, (void *)bcch_message, 1);
-    VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME( VCD_SIGNAL_DUMPER_FUNCTIONS_UE_DECODE_BCCH, VCD_FUNCTION_OUT );
     return;
   }
 
@@ -2053,7 +2062,6 @@ static void nr_rrc_ue_decode_NR_BCCH_DL_SCH_Message(NR_UE_RRC_INST_t *rrc,
     }
   }
   SEQUENCE_free(&asn_DEF_NR_BCCH_DL_SCH_Message, bcch_message, ASFM_FREE_EVERYTHING);
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME( VCD_SIGNAL_DUMPER_FUNCTIONS_UE_DECODE_BCCH, VCD_FUNCTION_OUT );
 }
 
 static void rrc_ue_generate_RRCSetupComplete(const NR_UE_RRC_INST_t *rrc, const uint8_t Transaction_id)
@@ -2152,7 +2160,9 @@ static void nr_rrc_process_rrcsetup(NR_UE_RRC_INST_t *rrc, const NR_RRCSetup_t *
     nr_rrc_rrcsetup_fallback(rrc);
 
   // perform the cell group configuration procedure in accordance with the received masterCellGroup
-  nr_rrc_ue_process_masterCellGroup(rrc, &rrcSetup->criticalExtensions.choice.rrcSetup->masterCellGroup, NULL, 0);
+  bool ret = nr_rrc_ue_process_masterCellGroup(rrc, &rrcSetup->criticalExtensions.choice.rrcSetup->masterCellGroup, NULL, 0);
+  if (!ret)
+    return;
   // perform the radio bearer configuration procedure in accordance with the received radioBearerConfig
   nr_rrc_ue_process_RadioBearerConfig(rrc, &rrcSetup->criticalExtensions.choice.rrcSetup->radioBearerConfig);
 
@@ -2232,7 +2242,6 @@ static int8_t nr_rrc_ue_decode_ccch(NR_UE_RRC_INST_t *rrc, const NRRrcMacCcchDat
   NR_DL_CCCH_Message_t *dl_ccch_msg = NULL;
   asn_dec_rval_t dec_rval;
   int rval=0;
-  VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_UE_DECODE_CCCH, VCD_FUNCTION_IN);
   LOG_D(RRC, "[NR UE%ld] Decoding DL-CCCH message (%d bytes), State %d\n", rrc->ue_id, ind->sdu_size, rrc->nrRrcState);
 
   dec_rval = uper_decode(NULL, &asn_DEF_NR_DL_CCCH_Message, (void **)&dl_ccch_msg, ind->sdu, ind->sdu_size, 0, 0);
@@ -2242,7 +2251,6 @@ static int8_t nr_rrc_ue_decode_ccch(NR_UE_RRC_INST_t *rrc, const NRRrcMacCcchDat
 
   if ((dec_rval.code != RC_OK) && (dec_rval.consumed == 0)) {
     LOG_E(RRC, "[UE %ld] Failed to decode DL-CCCH-Message (%zu bytes)\n", rrc->ue_id, dec_rval.consumed);
-    VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_UE_DECODE_CCCH, VCD_FUNCTION_OUT);
     return -1;
    }
 
@@ -2273,7 +2281,6 @@ static int8_t nr_rrc_ue_decode_ccch(NR_UE_RRC_INST_t *rrc, const NRRrcMacCcchDat
    }
 
    ASN_STRUCT_FREE(asn_DEF_NR_DL_CCCH_Message, dl_ccch_msg);
-   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_UE_DECODE_CCCH, VCD_FUNCTION_OUT);
    return rval;
 }
 
