@@ -151,8 +151,10 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP, frame_t frame, slot_t slo
   bool wait_prach_completed = gNB->num_scheduled_prach_rx >= NUM_PRACH_RX_FOR_NOISE_ESTIMATE;
   if (gNB->print_ue_stats && (wait_prach_completed || get_softmodem_params()->phy_test) && (slot == 0) && (frame & 127) == 0) {
     char stats_output[32656] = {0};
-    dump_mac_stats(gNB, stats_output, sizeof(stats_output), true);
-    LOG_I(NR_MAC, "Frame.Slot %d.%d\n%s\n", frame, slot, stats_output);
+    if(dump_mac_stats(gNB, stats_output, sizeof(stats_output), true)){
+      LOG_I(NR_MAC, "Frame.Slot %d.%d\n", frame, slot); //ALEX
+      LOG_I(NR_MAC, "%s\n", stats_output);
+    }; //ALEX
 
     // TODO: this should be replaced with a size() operation on connected_ue_list
     int num_ue = 0;
