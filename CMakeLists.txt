@@ -5,6 +5,14 @@ project (OpenAirInterface LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(OAI_VERSION 2.4.0)
 
+# Check number of logical cores available:
+cmake_host_system_information(RESULT CORE_COUNT QUERY NUMBER_OF_LOGICAL_CORES)
+
+if(CORE_COUNT GREATER 8)
+  message(STATUS "CPU has ${CORE_COUNT} cores. Enabling compile_commands.json")
+  set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
+endif()
+
 option(CUDA_ENABLE "Enable CUDA accelerated channel simulation" OFF)
 if(CUDA_ENABLE)
     find_package(CUDA REQUIRED)

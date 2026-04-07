@@ -234,6 +234,8 @@ int NB_UE_INST = 1;
 configmodule_interface_t *uniqCfg = NULL;
 nrLDPC_coding_interface_t nrLDPC_coding_interface = {0};
 
+//-------------------------------------MAIN---------------------------------------
+
 int main(int argc, char **argv)
 {
   start_background_system();

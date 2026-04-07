@@ -2,18 +2,17 @@
  * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
-#include "PHY/types.h"
+//#include "PHY/types.h"
 #include "PHY/defs_nr_UE.h"
 
 void
 phy_adjust_gain_nr (PHY_VARS_NR_UE *ue, uint32_t rx_power_fil_dB, uint8_t eNB_id)
 {
 
-  LOG_D(PHY,"Gain control: rssi %d (%d,%d)\n",
-	rx_power_fil_dB,
-	ue->measurements.rssi,
-	ue->measurements.rx_power_avg_dB[eNB_id]
-        );
+  LOG_W(PHY,"Gain control: RSSI %d (%d,%d)\n",
+	      rx_power_fil_dB,
+	      ue->measurements.rssi,
+	      ue->measurements.rx_power_avg_dB[eNB_id]); //ALEX changed from D to W
 
   // Gain control with hysterisis
   // Adjust gain in ue->rx_vars[0].rx_total_gain_dB
