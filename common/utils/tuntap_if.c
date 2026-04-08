@@ -252,7 +252,7 @@ void setup_ue_ipv4_route(const char* ifname, int instance_id, const char *ipv4)
 {
   //int table_id = instance_id - 1 + 10000;
    int table_id = 254; // use main routing table for UE routes [ALEX]
-   LOG_W(UTIL, "Setting up IPv4 routes for UE interface %s with IP %s at the table %d...\n", ifname, ipv4, table_id); //[ALEX]
+   LOG_A(UTIL, "Setting up IPv4 routes for UE interface %s with IP %s at the table %d...\n", ifname, ipv4, table_id); //[ALEX]
   char command_line[500];
   /*int res = sprintf(command_line,
                     "ip rule add from %s/32 table %d && "

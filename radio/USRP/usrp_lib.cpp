@@ -867,7 +867,7 @@ int trx_usrp_set_gains(openair0_device_t *device,
     LOG_E(HW,"RX Gain 0 too high, reduce by %f dB\n",
           openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0] - gain_range.stop());
     //int gain_diff = gain_range.stop() - (openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0]);
-    int gain_diff = (openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0]) - gain_range.stop(); //ALEX
+    int gain_diff = gain_range.stop()-(openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0]); //ALEX
     return gain_diff;
   }
 

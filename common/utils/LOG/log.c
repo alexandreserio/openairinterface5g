@@ -62,6 +62,7 @@ static volatile int log_mem_write_side = 0;
 static char * log_mem_filename;
 
 static mapping log_level_names[] = {{"error", OAILOG_ERR},
+                                   {"mylog", OAILOG_ME}, //ALEX added log option
                                    {"warn", OAILOG_WARNING},
                                    {"analysis", OAILOG_ANALYSIS},
                                    {"info", OAILOG_INFO},
@@ -108,6 +109,7 @@ mapping * log_option_names_ptr(void)
 /* .log_format = 0x13 uncolored standard messages
  * .log_format = 0x93 colored standard messages */
 /* keep white space in first position; switching it to 0 allows colors to be disabled*/
+static const char *const LOG_WHITE = "\033[1;37m"; //ALEX added log option
 static const char *const LOG_RED = "\033[1;31m"; /*!< \brief VT100 sequence for bold red foreground */
 static const char *const LOG_GREEN = "\033[32m"; /*!< \brief VT100 sequence for green foreground */
 static const char *const LOG_ORANGE = "\033[93m"; /*!< \brief VT100 sequence for orange foreground */
@@ -115,10 +117,10 @@ static const char *const LOG_BLUE = "\033[34m"; /*!< \brief VT100 sequence for b
 static const char *const LOG_CYBL = "\033[40;36m"; /*!< \brief VT100 sequence for cyan foreground on black background */
 static const char *const LOG_RESET = "\033[0m"; /*!< \brief VT100 sequence for reset (black) foreground */
 static const char *const log_level_highlight_start[] =
-    {LOG_RED, LOG_ORANGE, LOG_GREEN, "", LOG_BLUE, LOG_CYBL}; /*!< \brief Optional start-format strings for highlighting */
+    {LOG_RED, LOG_WHITE, LOG_ORANGE, LOG_GREEN, "", LOG_BLUE, LOG_CYBL}; /*!< \brief Optional start-format strings for highlighting */
 
 static const char *const log_level_highlight_end[] =
-    {LOG_RESET, LOG_RESET, LOG_RESET, LOG_RESET, LOG_RESET, LOG_RESET}; /*!< \brief Optional end-format strings for highlighting */
+    {LOG_RESET, LOG_RESET,  LOG_RESET, LOG_RESET, LOG_RESET, LOG_RESET, LOG_RESET}; /*!< \brief Optional end-format strings for highlighting */
 static void log_output_memory(log_component_t *c, const char *file, const char *func, int line, int comp, int level, const char* format,va_list args);
 
 int write_file_matlab(const char *fname,

@@ -49,13 +49,14 @@ extern "C" {
  * @{*/
 # define  OAILOG_DISABLE -1 /*!< \brief disable all LOG messages, cannot be used in LOG macros, use only in LOG module */
 # define  OAILOG_ERR      0 /*!< \brief critical error conditions, impact on "must have" functionalities */
-# define  OAILOG_WARNING  1 /*!< \brief warning conditions, shouldn't happen but doesn't impact "must have" functionalities */
-# define  OAILOG_ANALYSIS 2 /*!< \brief informational messages most people don't need, shouldn't impact real-time behavior */
-# define  OAILOG_INFO     3 /*!< \brief informational messages most people don't need, shouldn't impact real-time behavior */
-# define  OAILOG_DEBUG    4 /*!< \brief first level debug-level messages, for developers, may impact real-time behavior */
-# define  OAILOG_TRACE    5 /*!< \brief second level debug-level messages, for developers, likely impact real-time behavior*/
+# define  OAILOG_ME       1 //ALEX added log option
+# define  OAILOG_WARNING  2 /*!< \brief warning conditions, shouldn't happen but doesn't impact "must have" functionalities */
+# define  OAILOG_ANALYSIS 3 /*!< \brief informational messages most people don't need, shouldn't impact real-time behavior */
+# define  OAILOG_INFO     4 /*!< \brief informational messages most people don't need, shouldn't impact real-time behavior */
+# define  OAILOG_DEBUG    5 /*!< \brief first level debug-level messages, for developers, may impact real-time behavior */
+# define  OAILOG_TRACE    6 /*!< \brief second level debug-level messages, for developers, likely impact real-time behavior*/
 
-#define NUM_LOG_LEVEL 6 /*!< \brief the number of message levels users have with LOG (OAILOG_DISABLE is not available to user as a level, so it is not included)*/
+#define NUM_LOG_LEVEL 7 /*!< \brief the number of message levels users have with LOG (OAILOG_DISABLE is not available to user as a level, so it is not included)*/
 /** @}*/
 
 #define SET_LOG_OPTION(O) g_log->flag = (g_log->flag | O)
@@ -346,6 +347,16 @@ int32_t write_file_matlab(const char *fname,
     }                                                                     \
   } while (0)
 
+#define LOG_ME(c, x...)                                                    \
+  do {                                                                    \
+    T(T_LEGACY_##c##_INFO, T_PRINTF(x));                                 \
+    if (T_stdout) {                                                       \
+      if (g_log->log_component[c].level >= OAILOG_ME)                    \
+        logRecord_mt(__FILE__, __FUNCTION__, __LINE__, c, OAILOG_ME, x); \
+    }                                                                     \
+  } while (0) //ALEX added log option
+
+
 #define LOG_W(c, x...)                                                        \
   do {                                                                        \
     T(T_LEGACY_##c##_WARNING, T_PRINTF(x));                                   \
@@ -436,6 +447,12 @@ int32_t write_file_matlab(const char *fname,
       logRecord_lttng(__FILE__, __FUNCTION__, __LINE__, c, OAILOG_ERR, x); \
     }                                                                      \
   } while (0)
+#define LOG_ME(c, x...)                                                     \
+  do {                                                                     \
+    if (g_log->log_component[c].level >= OAILOG_ME) {                     \
+      logRecord_lttng(__FILE__, __FUNCTION__, __LINE__, c, OAILOG_ME, x); \
+    }                                                                      \
+  } while (0) //ALEX added log option
 #define LOG_W(c, x...)                                                         \
   do {                                                                         \
     if (g_log->log_component[c].level >= OAILOG_WARNING) {                     \
@@ -477,6 +494,12 @@ int32_t write_file_matlab(const char *fname,
     if (g_log->log_component[c].level >= OAILOG_ERR)                    \
       logRecord_mt(__FILE__, __FUNCTION__, __LINE__, c, OAILOG_ERR, x); \
   } while (0)
+
+#define LOG_ME(c, x...)                                                \
+  do {                                                                    \
+    if (g->log->log_component[c].level >= OAILOG_ME)                   \
+      logRecord_mt(__FILE__, __FUNCTION__, __LINE__, c, OAILOG_ME, x); \
+  } while (0) //ALEX added log option
 
 #define LOG_W(c, x...)                                                      \
   do {                                                                      \

@@ -236,7 +236,7 @@ static void UE_synch(void *arg) {
     if (get_nrUE_params()->agc)
       gain_change = nrue_ru_adjust_rx_gain(UE, INCREASE_IN_RXGAIN);
     if (gain_change)
-      LOG_I(PHY, "synch retry: Rx gain increased \n");
+      LOG_ME(PHY, "synch retry: Rx gain increased by %d\n", gain_change);
     else
       LOG_E(PHY, "synch Failed: \n");
   }

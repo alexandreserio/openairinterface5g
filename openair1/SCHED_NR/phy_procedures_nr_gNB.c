@@ -1124,7 +1124,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
     if (dB_fixed_x10(pusch_vars->ulsch_power_tot) < dB_fixed_x10(pusch_vars->ulsch_noise_power_tot) + gNB->pusch_thres) {
       NR_gNB_PHY_STATS_t *stats = get_phy_stats(gNB, ulsch->rnti);
       
-      if(log_cntr % 4 == 0){ //ALEX
+      if(log_cntr % 100 == 0){ //ALEX
         LOG_W(PHY,
             "PUSCH not detected in %d.%d (%d,%d,%d)\n",
             frame_rx,
