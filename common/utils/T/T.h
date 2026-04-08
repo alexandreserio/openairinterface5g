@@ -16,7 +16,7 @@
 #endif
 
 /* T message IDs */
-//#include "T_IDs.h"
+#include "T_IDs.h"
 
 
 /* known type - this is where you add new types */
