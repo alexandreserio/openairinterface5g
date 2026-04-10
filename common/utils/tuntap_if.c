@@ -267,17 +267,24 @@ bool tap_config(const char* ifname)
 
 void setup_ue_ipv4_route(const char* ifname, int instance_id, const char *ipv4)
 {
-  int table_id = instance_id - 1 + 10000;
+  // int table_id = instance_id - 1 + 10000;
 
   char command_line[500];
+  // int res = sprintf(command_line,
+  //                   "ip rule add from %s/32 table %d && "
+  //                   "ip rule add to %s/32 table %d && "
+  //                   "ip route add default dev %s table %d",
+  //                   ipv4,
+  //                   table_id,
+  //                   ipv4,
+  //                   table_id,
+  //                   ifname,
+  //                   table_id);
+  
+  int table_id = 254;
+
   int res = sprintf(command_line,
-                    "ip rule add from %s/32 table %d && "
-                    "ip rule add to %s/32 table %d && "
-                    "ip route add default dev %s table %d",
-                    ipv4,
-                    table_id,
-                    ipv4,
-                    table_id,
+                    "ip route add 192.168.70.128/26 via 15.0.0.1 dev %s table %d",
                     ifname,
                     table_id);
 
