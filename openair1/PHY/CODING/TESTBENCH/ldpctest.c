@@ -533,7 +533,32 @@ int main(int argc, char *argv[])
 
   // find minimum value in all sets of lifting size
   Zc = 0;
+  int Kb = 0;
+  if (Kprime > 3840) {
+    BG = 1;
+    Kb = 22;
+  } else {
+    BG = 2;
+    if (Kprime > 640)
+      Kb = 10;
+    else if (Kprime > 560)
+      Kb = 9;
+    else if (Kprime > 192)
+      Kb = 8;
+    else
+      Kb = 6;
+  }
 
+  const short lift_size[51] = {2,  3,   4,   5,   6,   7,   8,   9,   10,  11,  12,  13,  14,  15,  16,  18,  20,
+                               22, 24,  26,  28,  30,  32,  36,  40,  44,  48,  52,  56,  60,  64,  72,  80,  88,
+                               96, 104, 112, 120, 128, 144, 160, 176, 192, 208, 224, 240, 256, 288, 320, 352, 384};
+  for (int i1 = 0; i1 < 51; i1++) {
+    if (lift_size[i1] >= (double)Kprime / Kb) {
+      Zc = lift_size[i1];
+      break;
+    }
+  }
+  
   char fname[200];
   sprintf(fname, "ldpctest_BG_%d_Zc_%d_rate_%d-%d_Kprime_%d_maxit_%d.txt", BG, Zc, nom_rate, denom_rate, Kprime, max_iterations);
   FILE *fd = fopen(fname, "w");
