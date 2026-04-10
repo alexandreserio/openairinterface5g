@@ -25,15 +25,15 @@
 #endif
 
 typedef struct {
-  pthread_t* t_arr;
-  size_t len_thr;
+  pthread_t* t_arr; //dynamic array of POSIX thread IDs
+  size_t len_thr; //stores the count of threads in the pool <=> t_arr size
 
-  _Atomic(uint64_t) index;
+  _Atomic(uint64_t) index; //atomic counter that tracks which task is next to be processed
 
-  void* q_arr;
+  void* q_arr; //generic pointer to a queue structure from where worker threads pull tasks
 
-  pthread_barrier_t barrier;
-  _Atomic(uint64_t) dead_mask;
+  pthread_barrier_t barrier; //synchronization mechanism that forces all worker threads to wait at a specific point until every thread reaches that barrier
+  _Atomic(uint64_t) dead_mask; //atomic bitmask that likely tracks which threads have terminated or should terminate. Each bit represents a thread
 } tpool_t;
 
 /// @brief Push job to threadpool. May run task inline in case there are no worker threads

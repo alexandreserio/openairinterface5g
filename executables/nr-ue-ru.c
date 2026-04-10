@@ -417,7 +417,7 @@ int nrue_ru_adjust_rx_gain(PHY_VARS_NR_UE *UE, int gain_change)
   }
 
   int applied_rxgain = cfg0->rx_gain[0] - cfg0->rx_gain_offset[0];
-  LOG_I(HW, "Rxgain adjusted by %d dB, RX gain: %d dB \n", gain_change, applied_rxgain);
+  LOG_ME(HW, "Rxgain adjusted by %d dB, USRP RX gain: %d dB \n", gain_change, applied_rxgain); //ALEX
 
   return gain_change;
 }

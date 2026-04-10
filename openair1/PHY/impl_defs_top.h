@@ -161,8 +161,8 @@
 //#define MIN_RF_GAIN 96
 //#define MAX_RF_GAIN 200
 //#define MIN_RF_GAIN 80
-#define MAX_RF_GAIN 89 //ALEX changed to adjust B200
-#define MIN_RF_GAIN 0 //ALEX changed to adjust B200
+#define MAX_RF_GAIN 76 //ALEX changed to adjust B200 Rx max gain
+#define MIN_RF_GAIN 0 //ALEX changed to adjust B200 Rx min gain
 
 #define PHY_SYNCH_OFFSET ((OFDM_SYMBOL_SIZE_COMPLEX_SAMPLES)-1)  // OFFSET of BEACON SYNCH
 

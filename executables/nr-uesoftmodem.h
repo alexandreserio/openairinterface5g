@@ -51,7 +51,7 @@ extern uint16_t ue_id_g;
   {"uecap_file",               CONFIG_HLP_UECAP_FILE,          0,               .strptr=&nrUE_params.uecap_file,            .defstrval="./uecap_ports1.xml", TYPE_STRING,   0}, \
   {"reconfig-file",            CONFIG_HLP_RE_CFG_FILE,         0,               .strptr=&nrUE_params.reconfig_file,         .defstrval="./reconfig.raw",     TYPE_STRING,   0}, \
   {"rbconfig-file",            CONFIG_HLP_RB_CFG_FILE,         0,               .strptr=&nrUE_params.rbconfig_file,         .defstrval="./rbconfig.raw",     TYPE_STRING,   0}, \
-  {"ue-rxgain",                    CONFIG_HLP_UERXG,           0,               .dblptr=&nrUE_params.rx_gain,               .defdblval=110,    TYPE_DOUBLE,   0}, \
+  {"ue-rxgain",                    CONFIG_HLP_UERXG,           0,               .dblptr=&nrUE_params.rx_gain,               .defdblval=0,    TYPE_DOUBLE,   0}, /*ALEX changed from 110 to 0 in defdblval*/ \
   {"ue-txgain",                    CONFIG_HLP_UETXG,           0,               .dblptr=&nrUE_params.tx_gain,               .defdblval=0,      TYPE_DOUBLE,   0}, \
   {"ue-nb-ant-rx",                 CONFIG_HLP_UENANTR,         0,               .iptr=&(nrUE_params.nb_antennas_rx),        .defuintval=1,     TYPE_UINT8,    0}, \
   {"ue-nb-ant-tx",                 CONFIG_HLP_UENANTT,         0,               .iptr=&(nrUE_params.nb_antennas_tx),        .defuintval=1,     TYPE_UINT8,    0}, \
