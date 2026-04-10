@@ -572,7 +572,7 @@ int init_opt(void) {
       file_fd = fopen(in_path, "w");
 
       if (file_fd == NULL) {
-        LOG_D(OPT, "Failed to open file \"%s\" for writing\n", in_path);
+        LOG_E(OPT, "Failed to open file \"%s\" for writing\n", in_path); //ALEX changed for error output
         return (-1);
       }
 
