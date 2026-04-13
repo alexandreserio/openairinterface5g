@@ -3,6 +3,7 @@
  */
 
 #include "nr-ue-ru.h"
+#include "PHY/impl_defs_top.h"
 #include "nr-uesoftmodem.h"
 #include "PHY/NR_UE_TRANSPORT/nr_transport_proto_ue.h"
 
@@ -409,22 +410,24 @@ int nrue_ru_adjust_rx_gain(PHY_VARS_NR_UE *UE, int gain_change)
   if(UE->rx_total_gain_dB < MAX_RF_GAIN){
     cfg0->rx_gain[0] += gain_change;
   } else if (UE->rx_total_gain_dB == MAX_RF_GAIN){
-    LOG_ME(UTIL, "Max usrp rx gain reached! Reseting rx_gain to 0 dB...\n);");
+    LOG_E(UTIL, "Max usrp rx gain reached! Reseting rx_gain to MIN_RF_GAIN (%d)...\n", MIN_RF_GAIN);
     cfg0->rx_gain[0] = MIN_RF_GAIN;
+    UE->rx_total_gain_dB = (MAX_RF_GAIN - MIN_RF_GAIN);
   } //ALEX added new rx_gain control
 
   // Set new RX gain.
   int ret_gain = dev0->trx_set_gains_func(dev0, cfg0);
   // APPLY RX gain again if crossed the MAX RX gain threshold
-  if (ret_gain < 0) {
+  /*if (ret_gain < 0) {
     gain_change += ret_gain;
     cfg0->rx_gain[0] += ret_gain;
     ret_gain = dev0->trx_set_gains_func(dev0, cfg0);
-  }
-
-  int applied_rxgain = cfg0->rx_gain[0] - cfg0->rx_gain_offset[0];
-  LOG_ME(HW, "Rxgain adjusted by %d dB, USRP RX gain: %d dB \n", gain_change, applied_rxgain); //ALEX
-
+  }*/ //ALEX commented
+  if(ret_gain == 0){
+    LOG_E(HW, "Rx gain adjustment failed...\n");
+  } else {
+    LOG_ME(HW, "Rx gain adjusted by %d dB\n", gain_change);
+  } //ALEX
   return gain_change;
 }
 
