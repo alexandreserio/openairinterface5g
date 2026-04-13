@@ -872,9 +872,11 @@ int trx_usrp_set_gains(openair0_device_t *device,
   }
 
   s->usrp->set_rx_gain(openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0]);
-  LOG_I(HW,"Setting USRP RX gain to %f (rx_gain %f,gain_range.stop() %f)\n",
+  LOG_ME(HW,"Setting USRP RX gain to %f dB (rx_gain %f dB | gain_range.stop() %f)\n",
         openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0],
-        openair0_cfg[0].rx_gain[0],gain_range.stop());
+        s->usrp->get_rx_gain(0),
+        //openair0_cfg[0].rx_gain[0],
+        gain_range.stop());
   return(0);
 }
 

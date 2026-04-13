@@ -267,7 +267,7 @@ int main(int argc, char **argv)
           "no SYS_NICE capability: cannot set thread priority and affinity, consider running with sudo for optimum performance\n");
 
   cpuf=get_cpu_freq_GHz();
-  LOG_ME(UTIL, "Got CPU frequency GHz: %.3f\n", cpu); //ALEX added for info
+  LOG_ME(UTIL, "Got CPU frequency GHz: %.3f\n", cpuf); //ALEX added for info
   itti_init(TASK_MAX, tasks_info);
 
   init_opt();
