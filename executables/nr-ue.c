@@ -228,7 +228,7 @@ static void UE_synch(void *arg) {
       nrue_ru_adjust_rx_gain(UE, UE->adjust_rxgain);
     }
 
-    LOG_I(PHY, "Got synch: hw_slot_offset %d, carrier off %d Hz\n", hw_slot_offset, freq_offset);
+    LOG_A(PHY, "Got synch: hw_slot_offset %d, carrier off %d Hz\n", hw_slot_offset, freq_offset);
 
     UE->is_synchronized = 1;
   } else {
@@ -236,7 +236,7 @@ static void UE_synch(void *arg) {
     if (get_nrUE_params()->agc)
       gain_change = nrue_ru_adjust_rx_gain(UE, INCREASE_IN_RXGAIN);
     if (gain_change)
-      LOG_ME(PHY, "synch retry: Rx gain increased by %d\n", gain_change);
+      LOG_ME(PHY, "synch retry: Rx gain increased by %d dB\n", gain_change);
     else
       LOG_E(PHY, "synch Failed: \n");
   }

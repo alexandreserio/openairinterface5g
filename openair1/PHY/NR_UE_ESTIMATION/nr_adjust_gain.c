@@ -2,26 +2,25 @@
  * SPDX-License-Identifier: LicenseRef-CSSL-1.0
  */
 
+#include "PHY/impl_defs_top.h"
 #include "PHY/types.h"
 #include "PHY/defs_nr_UE.h"
 
-void
-phy_adjust_gain_nr (PHY_VARS_NR_UE *ue, uint32_t rx_power_fil_dB, uint8_t eNB_id)
+void phy_adjust_gain_nr (PHY_VARS_NR_UE *ue, uint32_t rx_power_fil_dB, uint8_t eNB_id)
 {
-
-  LOG_W(PHY,"Gain control: RSSI %d (%d,%d)\n",
+  LOG_D(PHY,"Gain control: RSSI %d (%d,%d)\n",
 	      rx_power_fil_dB,
 	      ue->measurements.rssi,
-	      ue->measurements.rx_power_avg_dB[eNB_id]); //ALEX changed from D to W
+	      ue->measurements.rx_power_avg_dB[eNB_id]);
 
   // Gain control with hysterisis
   // Adjust gain in ue->rx_vars[0].rx_total_gain_dB
 
-  if (rx_power_fil_dB < TARGET_RX_POWER - 5) //&& (ue->rx_total_gain_dB < MAX_RF_GAIN) )
-    ue->rx_total_gain_dB+=1; //ALEX changed from 5 to 1
-  else if (rx_power_fil_dB > TARGET_RX_POWER + 5) //&& (ue->rx_total_gain_dB > MIN_RF_GAIN) )
-    ue->rx_total_gain_dB-=1; //ALEX changed from 5 to 1
-
+  if ((rx_power_fil_dB < TARGET_RX_POWER - 5) && (ue->rx_total_gain_dB < MAX_RF_GAIN)) //&& (ue->rx_total_gain_dB < MAX_RF_GAIN) )
+    ue->rx_total_gain_dB+=1; //ALEX changed from 5 to 1 and added && condition
+  else if ((rx_power_fil_dB > TARGET_RX_POWER + 5) && (ue->rx_total_gain_dB > MIN_RF_GAIN)) //&& (ue->rx_total_gain_dB > MIN_RF_GAIN) )
+    ue->rx_total_gain_dB-=1; //ALEX changed from 5 to 1 and added && condition
+  
   if (ue->rx_total_gain_dB>MAX_RF_GAIN) {
     /*
     if ((openair_daq_vars.rx_rf_mode==0) && (openair_daq_vars.mode == openair_NOT_SYNCHED)) {
@@ -42,7 +41,7 @@ phy_adjust_gain_nr (PHY_VARS_NR_UE *ue, uint32_t rx_power_fil_dB, uint8_t eNB_id
     ue->rx_total_gain_dB = MIN_RF_GAIN;
   }
 
-  LOG_ME(PHY,"Gain control: rx_total_gain_dB = %d TARGET_RX_POWER %d (max %d,rxpf %d)\n",ue->rx_total_gain_dB,TARGET_RX_POWER,MAX_RF_GAIN,rx_power_fil_dB);
+  LOG_ME(PHY,"Gain control: rx_total_gain_dB = %d (TARGET_RX_POWER %d dB) (max %d dB | rxpf %d dB)\n",ue->rx_total_gain_dB,TARGET_RX_POWER,MAX_RF_GAIN,rx_power_fil_dB);
 
 #ifdef DEBUG_PHY
   /*  if ((ue->frame%100==0) || (ue->frame < 10))
