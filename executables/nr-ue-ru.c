@@ -409,11 +409,12 @@ int nrue_ru_adjust_rx_gain(PHY_VARS_NR_UE *UE, int gain_change)
   //cfg0->rx_gain[0] += gain_change;
   if(UE->rx_total_gain_dB < MAX_RF_GAIN){
     cfg0->rx_gain[0] += gain_change;
+    UE->rx_total_gain_dB = cfg0->rx_gain[0];
   } else if (UE->rx_total_gain_dB == MAX_RF_GAIN){
-    LOG_E(UTIL, "Max usrp rx gain reached! Reseting rx_gain to MIN_RF_GAIN (%d)...\n", MIN_RF_GAIN);
+    LOG_E(HW, "Max usrp rx gain reached! Reseting rx_gain to MIN_RF_GAIN (%d)...\n", MIN_RF_GAIN);
     cfg0->rx_gain[0] = MIN_RF_GAIN;
-    UE->rx_total_gain_dB = (MAX_RF_GAIN - MIN_RF_GAIN);
-  } //ALEX added new rx_gain control
+    UE->rx_total_gain_dB = cfg0->rx_gain[0];
+  }
 
   // Set new RX gain.
   int ret_gain = dev0->trx_set_gains_func(dev0, cfg0);
@@ -422,12 +423,7 @@ int nrue_ru_adjust_rx_gain(PHY_VARS_NR_UE *UE, int gain_change)
     gain_change += ret_gain;
     cfg0->rx_gain[0] += ret_gain;
     ret_gain = dev0->trx_set_gains_func(dev0, cfg0);
-  }*/ //ALEX commented
-  if(ret_gain == 0){
-    LOG_E(HW, "Rx gain adjustment failed...\n");
-  } else {
-    LOG_ME(HW, "Rx gain adjusted by %d dB\n", gain_change);
-  } //ALEX
+  }*/
   return gain_change;
 }
 

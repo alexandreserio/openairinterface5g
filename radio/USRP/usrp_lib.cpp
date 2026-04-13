@@ -865,14 +865,14 @@ int trx_usrp_set_gains(openair0_device_t *device,
   // limit to maximum gain
   if (openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0] > gain_range.stop()) {
     LOG_E(HW,"RX Gain 0 too high, reduce by %f dB\n",
-          openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0] - gain_range.stop());
+          openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0] - gain_range.stop());
     //int gain_diff = gain_range.stop() - (openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0]);
     int gain_diff = gain_range.stop()-(openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0]); //ALEX
     return gain_diff;
   }
 
   s->usrp->set_rx_gain(openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0]);
-  LOG_ME(HW,"Setting USRP RX gain to %f dB (rx_gain %f dB | gain_range.stop() %f)\n",
+  LOG_D(HW,"Setting USRP RX gain to %f dB (rx_gain %f dB | gain_range.stop() %f)\n",
         openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0],
         s->usrp->get_rx_gain(0),
         //openair0_cfg[0].rx_gain[0],
