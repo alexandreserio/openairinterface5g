@@ -405,7 +405,13 @@ int nrue_ru_adjust_rx_gain(PHY_VARS_NR_UE *UE, int gain_change)
   openair0_device_t *dev0 = &openair0_dev[UE->rf_map.card];
 
   // Increase the RX gain by the value determined by adjust_rxgain
-  cfg0->rx_gain[0] += gain_change;
+  //cfg0->rx_gain[0] += gain_change;
+  if(UE->rx_total_gain_dB < MAX_RF_GAIN){
+    cfg0->rx_gain[0] += gain_change;
+  } else if (UE->rx_total_gain_dB == MAX_RF_GAIN){
+    LOG_ME(UTIL, "Max usrp rx gain reached! Reseting rx_gain to 0 dB...\n);");
+    cfg0->rx_gain[0] = MIN_RF_GAIN;
+  } //ALEX added new rx_gain control
 
   // Set new RX gain.
   int ret_gain = dev0->trx_set_gains_func(dev0, cfg0);
