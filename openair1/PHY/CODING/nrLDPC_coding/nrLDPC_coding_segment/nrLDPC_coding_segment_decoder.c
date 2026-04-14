@@ -215,6 +215,7 @@ static void nr_process_decode_segment(void *arg)
     memset(rdata->c, 0, K >> 3);
     *rdata->decodeSuccess = false;
   }
+  LOG_I(PHY, "LDPC decode: %d/%d iterations (BG %d, Z %d, %s)\n", decodeIterations, p_decoderParms->numMaxIter, p_decoderParms->BG, p_decoderParms->Z, *rdata->decodeSuccess ? "OK" : "FAIL");
   stop_meas(rdata->p_ts_ldpc_decode);
 
   // Task completed
