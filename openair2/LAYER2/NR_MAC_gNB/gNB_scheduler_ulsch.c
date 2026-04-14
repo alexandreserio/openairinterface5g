@@ -869,6 +869,7 @@ static void nr_rx_ra_sdu(const module_id_t mod_id,
 
     // Decode the entire MAC PDU
     // It may have multiple MAC subPDUs, for example, a MAC subPDU with LCID 1 caring a RRCReestablishmentComplete
+    LOG_ME(NR_PHY, "At Scheduler ULSCH, nr_process_mac_pdu with harq_pid -1 being called!\n"); //ALEX added at gNB for debug harq error
     nr_process_mac_pdu(mod_id, old_UE, CC_id, frame, slot, sdu, sdu_len, -1);
     return;
   }

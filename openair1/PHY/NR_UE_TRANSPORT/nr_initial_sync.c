@@ -395,7 +395,7 @@ nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
       memcpy(ssbInfo->rxdata[ant], ue->common_vars.rxdata[ant], sizeof(c16_t) * fp->samples_per_frame * 2);
       memset(ssbInfo->rxdata[ant] + fp->samples_per_frame * 2, 0, fp->ofdm_symbol_size * sizeof(c16_t));
     }
-    LOG_I(NR_PHY,
+    LOG_ME(NR_PHY,
           "Scanning GSCN: %d, with SSB offset: %d, SSB Freq: %lf\n",
           ssbInfo->gscnInfo.gscn,
           ssbInfo->gscnInfo.ssbFirstSC,
