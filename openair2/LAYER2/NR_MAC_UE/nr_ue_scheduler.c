@@ -39,6 +39,7 @@
 #include "NR_MAC_COMMON/nr_mac.h"
 #include "NR_MAC_COMMON/nr_mac_common.h"
 #include "NR_MAC_UE/mac_proto.h"
+#include "NR_MAC_UE/nr_ue_stats.h"
 
 /* utils */
 #include "assertions.h"
@@ -1323,6 +1324,8 @@ void nr_ue_dl_scheduler(NR_UE_MAC_INST_t *mac, nr_downlink_indication_t *dl_info
 {
   frame_t rx_frame = dl_info->frame;
   slot_t rx_slot = dl_info->slot;
+
+  nr_ue_stats_tick(rx_frame, rx_slot);
 
   fapi_nr_dl_config_request_t *dl_config = get_dl_config_request(mac, rx_slot);
   dl_config->sfn  = rx_frame;

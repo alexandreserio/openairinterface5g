@@ -33,6 +33,7 @@
 #include "common/utils/LOG/log.h"
 
 #include <stdalign.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <syscall.h>
 #include <time.h>
@@ -48,6 +49,8 @@
 
 #include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_interface.h"
 #include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_nr_interface.h"
+
+__attribute__((weak)) void nr_ue_stats_add_ldpc(int iterations, int max_iterations, bool success);
 
 /**
  * \typedef nrLDPC_decoding_parameters_t
@@ -215,7 +218,8 @@ static void nr_process_decode_segment(void *arg)
     memset(rdata->c, 0, K >> 3);
     *rdata->decodeSuccess = false;
   }
-  LOG_I(PHY, "LDPC decode: %d/%d iterations (BG %d, Z %d, %s)\n", decodeIterations, p_decoderParms->numMaxIter, p_decoderParms->BG, p_decoderParms->Z, *rdata->decodeSuccess ? "OK" : "FAIL");
+  if (nr_ue_stats_add_ldpc)
+    nr_ue_stats_add_ldpc(decodeIterations, p_decoderParms->numMaxIter, *rdata->decodeSuccess);
   stop_meas(rdata->p_ts_ldpc_decode);
 
   // Task completed

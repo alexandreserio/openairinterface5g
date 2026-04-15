@@ -43,6 +43,7 @@
 /* MAC */
 #include "NR_MAC_COMMON/nr_mac.h"
 #include "NR_MAC_UE/mac_proto.h"
+#include "NR_MAC_UE/nr_ue_stats.h"
 #include "common/utils/nr/nr_common.h"
 #include "openair2/NR_UE_PHY_INTERFACE/NR_Packet_Drop.h"
 
@@ -1524,7 +1525,8 @@ void nr_ue_process_l1_measurements(NR_UE_MAC_INST_t *mac, frame_t frame, int slo
     int ssb_index = l1_measurements->ssb_index;
     mac->ssb_measurements[ssb_index].ssb_rsrp_dBm = l1_measurements->rsrp_dBm;
     mac->ssb_measurements[ssb_index].ssb_sinr_dB = l1_measurements->sinr_dB;
-    LOG_I(NR_MAC, "(%d.%d) SSB %d: SS-RSRP %d dBm, SS-SINR %.1f dB\n", frame, slot, ssb_index, l1_measurements->rsrp_dBm, l1_measurements->sinr_dB);
+    nr_ue_stats_add_rsrp(l1_measurements->rsrp_dBm);
+    nr_ue_stats_add_sinr(l1_measurements->sinr_dB);
   } else if (csi_meas) {
     mac->csirs_measurements.rsrp_dBm = l1_measurements->rsrp_dBm;
     mac->csirs_measurements.i1 = l1_measurements->i1;
