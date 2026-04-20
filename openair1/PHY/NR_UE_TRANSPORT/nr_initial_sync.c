@@ -352,8 +352,9 @@ void nr_scan_ssb(void *arg)
       if (ssbInfo->syncRes.cell_detected) {
         uint32_t rsrp_avg = nr_ue_calculate_ssb_rsrp(ssbInfo->fp, rxdataF, 0, ssbInfo->gscnInfo.ssbFirstSC);
         int rsrp_db_per_re = 10 * log10(rsrp_avg);
+        LOG_ME(PHY, "SCAN SSB...\n");  //ALEX DEBUG
         ssbInfo->adjust_rxgain = TARGET_RX_POWER - rsrp_db_per_re;
-        LOG_ME(PHY, "pbch rx ok. rsrp:%d dB/RE, adjust_rxgain:%d dB\n", rsrp_db_per_re, ssbInfo->adjust_rxgain); //ALEX changed I to ME
+        LOG_A(PHY, "pbch rx ok. rsrp:%d dB/RE, adjust_rxgain:%d dB\n", rsrp_db_per_re, ssbInfo->adjust_rxgain); //ALEX changed I to A
       }
     }
   }
@@ -395,7 +396,7 @@ nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
       memcpy(ssbInfo->rxdata[ant], ue->common_vars.rxdata[ant], sizeof(c16_t) * fp->samples_per_frame * 2);
       memset(ssbInfo->rxdata[ant] + fp->samples_per_frame * 2, 0, fp->ofdm_symbol_size * sizeof(c16_t));
     }
-    LOG_ME(NR_PHY,
+    LOG_I(NR_PHY,
           "Scanning GSCN: %d, with SSB offset: %d, SSB Freq: %lf\n",
           ssbInfo->gscnInfo.gscn,
           ssbInfo->gscnInfo.ssbFirstSC,
@@ -411,7 +412,7 @@ nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
   for (int i = 0; i < numGscn; i++) {
     nr_ue_ssb_scan_t *ssbInfo = &ssb_info[i];
     if (ssbInfo->syncRes.cell_detected) {
-      LOG_I(NR_PHY,
+      LOG_A(NR_PHY,
             "Cell Detected with GSCN: %d, SSB SC offset: %d, SSB Ref: %lf, PSS Corr peak: %d dB, PSS Corr Average: %d\n",
             ssbInfo->gscnInfo.gscn,
             ssbInfo->gscnInfo.ssbFirstSC,
@@ -437,6 +438,7 @@ nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
     fp->ssb_index = res->ssbIndex;
     ue->symbol_offset = res->symbolOffset;
     ue->common_vars.freq_offset = res->freqOffset;
+    LOG_ME(PHY, "INITIAL SYNC...\n");  //ALEX DEBUG
     ue->adjust_rxgain = res->adjust_rxgain;
   }
 

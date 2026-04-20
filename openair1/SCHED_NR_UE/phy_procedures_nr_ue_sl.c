@@ -205,6 +205,7 @@ int psbch_pscch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr
       sym = (sym == 0) ? 5 : sym + 1;
     }
 
+    LOG_ME(PHY, "PSBCH...\n");  //ALEX DEBUG
     ue->adjust_rxgain = nr_sl_psbch_rsrp_measurements(ue, sl_phy_params, fp, rxdataF, false);
 
     LOG_D(NR_PHY, " ------  Decode SL-MIB: frame.slot %d.%d ------  \n", frame_rx % 1024, nr_slot_rx);

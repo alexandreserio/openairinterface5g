@@ -3,6 +3,7 @@
  */
 
 #include "PHY/defs_nr_common.h"
+#include "nas_log.h"
 #define _GNU_SOURCE // For pthread_setname_np
 #include <pthread.h>
 #include <openair1/PHY/impl_defs_top.h>
@@ -225,7 +226,7 @@ static void UE_synch(void *arg) {
     }
 
     if (get_nrUE_params()->agc) {
-      nrue_ru_adjust_rx_gain(UE, UE->adjust_rxgain);
+      nrue_ru_adjust_rx_gain(UE, UE->adjust_rxgain); //ALEX runs to make adjustment to TARGET_RF_POWER after sync with cell. Last adjustment after "cell search"/"initial_sync"
     }
 
     LOG_A(PHY, "Got synch: hw_slot_offset %d, carrier off %d Hz\n", hw_slot_offset, freq_offset);
@@ -556,6 +557,9 @@ static int UE_dl_preprocessing(PHY_VARS_NR_UE *UE,
     }
 
     sampleShift = pbch_processing(UE, proc, phy_data);
+    if(get_nrUE_params()->agc && UE->is_synchronized){ //ALEX added for AGC control when connected;
+      nrue_ru_adjust_rx_gain(UE, UE->adjust_rxgain);
+    }
     pdcch_processing(UE, proc, phy_data);
     if (phy_data->dlsch[0].active
         && (phy_data->dlsch[0].rnti_type == TYPE_C_RNTI_ || phy_data->dlsch[0].rnti_type == TYPE_RA_RNTI_)) {

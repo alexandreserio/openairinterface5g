@@ -6,6 +6,7 @@
  * \brief UE measurements routines
  */
 
+#include "PHY/impl_defs_top.h"
 #include "executables/softmodem-common.h"
 #include "executables/nr-softmodem-common.h"
 #include "PHY/defs_nr_UE.h"
@@ -196,16 +197,26 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
 
   uint32_t rsrp_avg = nr_ue_calculate_ssb_rsrp(fp, rxdataF, symbol_offset, fp->ssb_start_subcarrier);
   float rsrp_db_per_re = 10 * log10(rsrp_avg);
-
   openair0_config_t *cfg0 = &openair0_cfg[ue->rf_map.card];
 
   if (rsrp_avg == 0)
     ue->measurements.ssb_rsrp_dBm[ssb_index] = -200; // lower than any value to be reported per Table 10.1.6.1-1 of 38.133
-  else
+  else {
     ue->measurements.ssb_rsrp_dBm[ssb_index] = rsrp_db_per_re + 30 - SQ15_SQUARED_NORM_FACTOR_DB
                                                - ((int)cfg0->rx_gain[0] - (int)cfg0->rx_gain_offset[0])
                                                - dB_fixed(fp->ofdm_symbol_size);
-
+    if((TARGET_RX_POWER - (int)rsrp_db_per_re) > 5){
+      ue->adjust_rxgain = +1; //ALEX added for AGC test
+      LOG_ME(PHY, "NEW adjust_rxgain assigned! ( %d dB)\n", ue->adjust_rxgain); //ALEX added for debug
+    }
+    else if((TARGET_RX_POWER - (int)rsrp_db_per_re) < -5){
+      ue->adjust_rxgain = -1; //ALEX added for AGC test
+      LOG_ME(PHY, "NEW adjust_rxgain assigned! ( %d dB)\n", ue->adjust_rxgain); //ALEX added for debug
+    }
+    else {
+      ue->adjust_rxgain = 0;
+    }
+  }
   // to obtain non-integer dB value with a resoluion of 0.5dB
   uint32_t signal_pwr = rsrp_avg > ue->measurements.n0_power_avg ? rsrp_avg - ue->measurements.n0_power_avg : 0;
   int SNRtimes10 = dB_fixed_x10(signal_pwr) - dB_fixed_x10(ue->measurements.n0_power_avg);
@@ -213,13 +224,14 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
 
   static uint32_t log_cntr = 0; //ALEX
   if(log_cntr % 100 == 0){
-    LOG_I(PHY,
-          "[UE %d] ssb %d SS-RSRP: %d dBm/RE (rsrp: %f dB/RE), SS-SINR: %f dB\n",
+    LOG_ME(PHY,
+          "[UE %d] ssb %d SS-RSRP: %d dBm/RE (rsrp: %f dB/RE), SS-SINR: %f dB (Current RX gain: %d)\n",
           ue->Mod_id,
           ssb_index,
           ue->measurements.ssb_rsrp_dBm[ssb_index],
           rsrp_db_per_re,
-          ue->measurements.ssb_sinr_dB[ssb_index]); //ALEX D to I
+          ue->measurements.ssb_sinr_dB[ssb_index],
+          (int)cfg0->rx_gain[0]); //ALEX D to ME and added current RX gain configured for USRP
   }
   log_cntr++; //ALEX added
 
@@ -590,6 +602,7 @@ int nr_sl_psbch_rsrp_measurements(PHY_VARS_NR_UE *ue,
       - ((int)openair0_cfg[ue->rf_map.card].rx_gain[0] - (int)openair0_cfg[ue->rf_map.card].rx_gain_offset[0])
       - dB_fixed(fp->ofdm_symbol_size);
 
+  LOG_ME(PHY, "SL_PSBCH_RSRP_MEASURMENTS...\n");  //ALEX DEBUG
   int adjust_rxgain = TARGET_RX_POWER - psbch_rx->rsrp_dB_per_RE;
 
   LOG_D(PHY,

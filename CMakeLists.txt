@@ -8,7 +8,7 @@ set(OAI_VERSION 2.4.0)
 # Check number of logical cores available:
 cmake_host_system_information(RESULT CORE_COUNT QUERY NUMBER_OF_LOGICAL_CORES)
 
-if(CORE_COUNT GREATER 8)
+if(CORE_COUNT GREATER 3)
   message(STATUS "CPU has ${CORE_COUNT} cores. Enabling compile_commands.json")
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 endif()

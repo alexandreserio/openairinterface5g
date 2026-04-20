@@ -84,7 +84,6 @@
  * @}
  */
 
-#include <common/utils/nr/nr_common.h>
 #include <common/utils/utils.h>
 #include "defs_eNB.h"
 #include "types.h"

@@ -428,13 +428,13 @@ static void nr_ue_measurement_procedures(uint16_t l,
   }
 
   // accumulate and filter timing offset estimation every subframe (instead of every frame)
-  if (( nr_slot_rx == 2) && (l==(2-frame_parms->Ncp))) {
+  /*if (( nr_slot_rx == 2) && (l==(2-frame_parms->Ncp))) {
 
     // AGC
     //printf("start adjust gain power avg db %d\n", ue->measurements.rx_power_avg_dB[gNB_id]);
     phy_adjust_gain_nr (ue,ue->measurements.rx_power_avg_dB[gNB_id],gNB_id);
     
-  }
+  }*/ //ALEX commented this block. It seems not working well
 }
 
 static int nr_ue_pbch_procedures(PHY_VARS_NR_UE *ue,
