@@ -205,11 +205,11 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
     ue->measurements.ssb_rsrp_dBm[ssb_index] = rsrp_db_per_re + 30 - SQ15_SQUARED_NORM_FACTOR_DB
                                                - ((int)cfg0->rx_gain[0] - (int)cfg0->rx_gain_offset[0])
                                                - dB_fixed(fp->ofdm_symbol_size);
-    if((TARGET_RX_POWER - (int)rsrp_db_per_re) > 5 && (ue->rx_total_gain_dB != 0)){
+    if(((TARGET_RX_POWER - (int)rsrp_db_per_re) > 5) && (cfg0->rx_gain[0] < MAX_RF_GAIN)){
       ue->adjust_rxgain = +1; //ALEX added for AGC test
       LOG_ME(PHY, "NEW adjust_rxgain assigned! ( %d dB)\n", ue->adjust_rxgain); //ALEX added for debug
     }
-    else if((TARGET_RX_POWER - (int)rsrp_db_per_re) < -5 && (ue->rx_total_gain_dB != MAX_RF_GAIN)){
+    else if(((TARGET_RX_POWER - (int)rsrp_db_per_re) < -5) && (cfg0->rx_gain[0] > 0)){
       ue->adjust_rxgain = -1; //ALEX added for AGC test
       LOG_ME(PHY, "NEW adjust_rxgain assigned! ( %d dB)\n", ue->adjust_rxgain); //ALEX added for debug
     }
@@ -225,7 +225,7 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
   static uint32_t log_cntr = 0; //ALEX
   if(log_cntr % 100 == 0){
     LOG_ME(PHY,
-          "[UE %d] ssb %d SS-RSRP: %d dBm/RE (rsrp: %f dB/RE), SS-SINR: %f dB (Current RX gain: %d)\n",
+          "[UE %d] ssb %d SS-RSRP: %d dBm/RE (rsrp: %.2f dB/RE), SS-SINR: %.1f dB (Current RX gain: %d)\n",
           ue->Mod_id,
           ssb_index,
           ue->measurements.ssb_rsrp_dBm[ssb_index],
