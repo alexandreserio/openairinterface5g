@@ -205,22 +205,25 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
     ue->measurements.ssb_rsrp_dBm[ssb_index] = rsrp_db_per_re + 30 - SQ15_SQUARED_NORM_FACTOR_DB
                                                - ((int)cfg0->rx_gain[0] - (int)cfg0->rx_gain_offset[0])
                                                - dB_fixed(fp->ofdm_symbol_size);
-    if(((TARGET_RX_POWER - (int)rsrp_db_per_re) > 5) && (cfg0->rx_gain[0] < MAX_RF_GAIN)){
+    // to obtain non-integer dB value with a resoluion of 0.5dB
+    uint32_t signal_pwr = rsrp_avg > ue->measurements.n0_power_avg ? rsrp_avg - ue->measurements.n0_power_avg : 0;
+    int SNRtimes10 = dB_fixed_x10(signal_pwr) - dB_fixed_x10(ue->measurements.n0_power_avg);
+    ue->measurements.ssb_sinr_dB[ssb_index] = SNRtimes10 / 10.0;
+
+
+    if(((TARGET_RX_POWER - (int)rsrp_db_per_re) > 10) && (cfg0->rx_gain[0] < MAX_RF_GAIN)){
       ue->adjust_rxgain = +1; //ALEX added for AGC test
       LOG_ME(PHY, "NEW adjust_rxgain assigned! ( %d dB)\n", ue->adjust_rxgain); //ALEX added for debug
     }
-    else if(((TARGET_RX_POWER - (int)rsrp_db_per_re) < -5) && (cfg0->rx_gain[0] > 0)){
+    else if(((TARGET_RX_POWER - (int)rsrp_db_per_re) < -10) && (cfg0->rx_gain[0] > 0)){
       ue->adjust_rxgain = -1; //ALEX added for AGC test
       LOG_ME(PHY, "NEW adjust_rxgain assigned! ( %d dB)\n", ue->adjust_rxgain); //ALEX added for debug
     }
     else {
       ue->adjust_rxgain = 0;
     }
+
   }
-  // to obtain non-integer dB value with a resoluion of 0.5dB
-  uint32_t signal_pwr = rsrp_avg > ue->measurements.n0_power_avg ? rsrp_avg - ue->measurements.n0_power_avg : 0;
-  int SNRtimes10 = dB_fixed_x10(signal_pwr) - dB_fixed_x10(ue->measurements.n0_power_avg);
-  ue->measurements.ssb_sinr_dB[ssb_index] = SNRtimes10 / 10.0;
 
   static uint32_t log_cntr = 0; //ALEX
   if(log_cntr % 100 == 0){

@@ -1319,9 +1319,9 @@ extern "C" {
       case 7680000:
         s->usrp->set_master_clock_rate(30.72e6);
         //openair0_cfg[0].samples_per_packet    = 1024;
-        openair0_cfg[0].tx_sample_advance     = 93;
-        openair0_cfg[0].tx_bw                 = 5e6;
-        openair0_cfg[0].rx_bw                 = 5e6;
+        openair0_cfg[0].tx_sample_advance     = 93; //ALEX
+        openair0_cfg[0].tx_bw                 = 5e6; //ALEX
+        openair0_cfg[0].rx_bw                 = 5e6; //ALEX
         break;
 
       case 1920000:
