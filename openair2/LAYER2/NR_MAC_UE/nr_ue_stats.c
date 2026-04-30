@@ -18,12 +18,16 @@ void nr_ue_stats_add_sinr(float sinr_dB)
   g_stats.sinr_count++;
 }
 
-void nr_ue_stats_add_ldpc(int iterations, int max_iterations, bool success)
+void nr_ue_stats_add_ldpc(int iterations, int max_iterations, bool success, int BG)
 {
   atomic_fetch_add_explicit(&g_stats.ldpc_iter_sum, (uint_fast64_t)iterations, memory_order_relaxed);
   atomic_fetch_add_explicit(&g_stats.ldpc_count, 1, memory_order_relaxed);
-  if (!success) 
+  if (!success)
     atomic_fetch_add_explicit(&g_stats.ldpc_failures, 1, memory_order_relaxed);
+  if (BG == 1)
+    atomic_fetch_add_explicit(&g_stats.ldpc_bg1_count, 1, memory_order_relaxed);
+  else if (BG == 2)
+    atomic_fetch_add_explicit(&g_stats.ldpc_bg2_count, 1, memory_order_relaxed);
   (void)max_iterations;
 }
 
@@ -41,6 +45,8 @@ void nr_ue_stats_dump_and_reset(void)
   uint_fast64_t ldpc_iter = atomic_exchange_explicit(&g_stats.ldpc_iter_sum, 0, memory_order_relaxed);
   uint_fast32_t ldpc_cnt = atomic_exchange_explicit(&g_stats.ldpc_count, 0, memory_order_relaxed);
   uint_fast32_t ldpc_fail = atomic_exchange_explicit(&g_stats.ldpc_failures, 0, memory_order_relaxed);
+  uint_fast32_t ldpc_bg1 = atomic_exchange_explicit(&g_stats.ldpc_bg1_count, 0, memory_order_relaxed);
+  uint_fast32_t ldpc_bg2 = atomic_exchange_explicit(&g_stats.ldpc_bg2_count, 0, memory_order_relaxed);
   uint_fast32_t rlc_retx = atomic_exchange_explicit(&g_stats.rlc_retx_count, 0, memory_order_relaxed);
 
   g_stats.rsrp_sum = 0;
@@ -65,6 +71,17 @@ void nr_ue_stats_dump_and_reset(void)
           fail_rate,
           (uint32_t)ldpc_cnt,
           (uint32_t)ldpc_fail);
+    uint_fast32_t bg_total = ldpc_bg1 + ldpc_bg2;
+    if (bg_total > 0) {
+      LOG_I(NR_MAC,
+            "  LDPC BG: BG1 %u/%u (%.1f%%), BG2 %u/%u (%.1f%%)\n",
+            (uint32_t)ldpc_bg1,
+            (uint32_t)bg_total,
+            100.0 * ldpc_bg1 / bg_total,
+            (uint32_t)ldpc_bg2,
+            (uint32_t)bg_total,
+            100.0 * ldpc_bg2 / bg_total);
+    }
   }
   if (rlc_retx > 0)
     LOG_I(NR_MAC, "  RLC:     %u retransmissions\n", (uint32_t)rlc_retx);
