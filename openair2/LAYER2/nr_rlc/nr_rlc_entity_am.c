@@ -30,6 +30,8 @@
 #include "common/utils/time_stat.h"
 #include "common/utils/assertions.h"
 
+__attribute__((weak)) void nr_ue_stats_add_rlc_retx(void);
+
 /* for a given SDU/SDU segment, computes the corresponding PDU header size */
 static int compute_pdu_header_size(nr_rlc_entity_am_t *entity,
                                    nr_rlc_sdu_segment_t *sdu)
@@ -521,6 +523,8 @@ process_wait_list_head:
          * increase too much.
          */
         cur_wait_list->sdu->retx_count++;
+        if (nr_ue_stats_add_rlc_retx)
+          nr_ue_stats_add_rlc_retx();
         /* report max RETX reached for all retx_count >= max_retx_threshold
          * (specs say to report if retx_count == max_retx_threshold).
          * Upper layers should react (radio link failure), so no big deal.
@@ -1919,6 +1923,8 @@ static void check_t_poll_retransmit(nr_rlc_entity_am_t *entity)
    * increase too much.
    */
   cur->sdu->retx_count++;
+  if (nr_ue_stats_add_rlc_retx)
+    nr_ue_stats_add_rlc_retx();
 
   int sdu_retx_count = cur->sdu->retx_count;
   int retransmit_sn = cur->sdu->sn;

@@ -27,6 +27,11 @@ void nr_ue_stats_add_ldpc(int iterations, int max_iterations, bool success)
   (void)max_iterations;
 }
 
+void nr_ue_stats_add_rlc_retx(void)
+{
+  atomic_fetch_add_explicit(&g_stats.rlc_retx_count, 1, memory_order_relaxed);
+}
+
 void nr_ue_stats_dump_and_reset(void)
 {
   int64_t rsrp_sum = g_stats.rsrp_sum;
@@ -36,13 +41,14 @@ void nr_ue_stats_dump_and_reset(void)
   uint_fast64_t ldpc_iter = atomic_exchange_explicit(&g_stats.ldpc_iter_sum, 0, memory_order_relaxed);
   uint_fast32_t ldpc_cnt = atomic_exchange_explicit(&g_stats.ldpc_count, 0, memory_order_relaxed);
   uint_fast32_t ldpc_fail = atomic_exchange_explicit(&g_stats.ldpc_failures, 0, memory_order_relaxed);
+  uint_fast32_t rlc_retx = atomic_exchange_explicit(&g_stats.rlc_retx_count, 0, memory_order_relaxed);
 
   g_stats.rsrp_sum = 0;
   g_stats.rsrp_count = 0;
   g_stats.sinr_sum = 0.0;
   g_stats.sinr_count = 0;
 
-  if (rsrp_cnt == 0 && sinr_cnt == 0 && ldpc_cnt == 0)
+  if (rsrp_cnt == 0 && sinr_cnt == 0 && ldpc_cnt == 0 && rlc_retx == 0)
     return;
 
   LOG_I(NR_MAC, "UE stats (last %d frames):\n", PRINT_PERIOD_FRAMES);
@@ -60,6 +66,8 @@ void nr_ue_stats_dump_and_reset(void)
           (uint32_t)ldpc_cnt,
           (uint32_t)ldpc_fail);
   }
+  if (rlc_retx > 0)
+    LOG_I(NR_MAC, "  RLC:     %u retransmissions\n", (uint32_t)rlc_retx);
 }
 
 void nr_ue_stats_tick(int frame, int slot)
