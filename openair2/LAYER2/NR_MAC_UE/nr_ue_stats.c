@@ -1,10 +1,57 @@
 #include "nr_ue_stats.h"
 #include "common/utils/LOG/log.h"
 #include <stdbool.h>
+#include <inttypes.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
 
 #define PRINT_PERIOD_FRAMES 128
+#define DEFAULT_CSV_PATH "nr_ue_stats.csv"
 
 static nr_ue_stats_t g_stats;
+static FILE *g_csv = NULL;
+static uint64_t g_period_idx = 0;
+static struct timespec g_start_ts;
+
+static void close_csv(void)
+{
+  if (g_csv) {
+    fclose(g_csv);
+    g_csv = NULL;
+  }
+}
+
+static FILE *open_csv(void)
+{
+  if (g_csv) {
+    return g_csv;
+  }
+
+  const char *path = getenv("NR_UE_STATS_CSV");
+  if (!path || path[0] == '\0') {
+    path = DEFAULT_CSV_PATH;
+  }
+
+  g_csv = fopen(path, "w");
+  if (!g_csv) {
+    LOG_E(NR_MAC, "nr_ue_stats: could not open CSV file '%s'\n", path);
+    return NULL;
+  }
+
+  setvbuf(g_csv, NULL, _IOLBF, 0);
+  fprintf(g_csv,
+          "period,elapsed_s,"
+          "rsrp_avg_dBm,rsrp_count,"
+          "sinr_avg_dB,sinr_count,"
+          "ldpc_avg_iter,ldpc_fail_rate,ldpc_count,ldpc_failures,"
+          "ldpc_bg1_count,ldpc_bg2_count,"
+          "rlc_retx_count\n");
+  clock_gettime(CLOCK_MONOTONIC, &g_start_ts);
+  atexit(close_csv);
+  LOG_I(NR_MAC, "nr_ue_stats: writing CSV to '%s'\n", path);
+  return g_csv;
+}
 
 void nr_ue_stats_add_rsrp(int rsrp_dBm)
 {
@@ -56,6 +103,43 @@ void nr_ue_stats_dump_and_reset(void)
 
   if (rsrp_cnt == 0 && sinr_cnt == 0 && ldpc_cnt == 0 && rlc_retx == 0)
     return;
+
+  FILE *csv = open_csv();
+  if (csv) {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    double elapsed = (now.tv_sec - g_start_ts.tv_sec) + (now.tv_nsec - g_start_ts.tv_nsec) / 1e9;
+
+    fprintf(csv, "%" PRIu64 ",%.3f,", g_period_idx, elapsed);
+    if (rsrp_cnt > 0) {
+      fprintf(csv, "%.3f,%u,", (double)rsrp_sum / rsrp_cnt, rsrp_cnt);
+    }
+    else {
+      fprintf(csv, ",0,");
+    }
+
+    if (sinr_cnt > 0) {
+      fprintf(csv, "%.3f,%u,", sinr_sum / sinr_cnt, sinr_cnt);
+    }
+    else {
+      fprintf(csv, ",0,");
+    }
+
+    if (ldpc_cnt > 0) {
+      fprintf(csv,
+              "%.4f,%.6f,%u,%u,",
+              (double)ldpc_iter / ldpc_cnt,
+              (double)ldpc_fail / ldpc_cnt,
+              (uint32_t)ldpc_cnt,
+              (uint32_t)ldpc_fail);
+    }
+    else {
+      fprintf(csv, ",,0,0,");
+    }
+
+    fprintf(csv, "%u,%u,%u\n", (uint32_t)ldpc_bg1, (uint32_t)ldpc_bg2, (uint32_t)rlc_retx);
+  }
+  g_period_idx++;
 
   LOG_I(NR_MAC, "UE stats (last %d frames):\n", PRINT_PERIOD_FRAMES);
   if (rsrp_cnt > 0)

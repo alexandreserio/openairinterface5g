@@ -21,6 +21,7 @@ typedef struct {
   atomic_uint_fast32_t ldpc_failures; /// Total number of LDPC failures
   atomic_uint_fast32_t ldpc_bg1_count; /// Number of decodes using BG1
   atomic_uint_fast32_t ldpc_bg2_count; /// Number of decodes using BG2
+
   // RLC
   atomic_uint_fast32_t rlc_retx_count; /// Total number of RLC retransmissions
 } nr_ue_stats_t;
