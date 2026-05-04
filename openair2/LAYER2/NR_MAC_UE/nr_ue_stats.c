@@ -13,6 +13,7 @@ static nr_ue_stats_t g_stats;
 static FILE *g_csv = NULL;
 static uint64_t g_period_idx = 0;
 static struct timespec g_start_ts;
+static nr_ue_stats_radio_callbacks_t g_callbacks = {0};
 
 static void close_csv(void)
 {
@@ -46,7 +47,8 @@ static FILE *open_csv(void)
           "sinr_avg_dB,sinr_count,"
           "ldpc_avg_iter,ldpc_fail_rate,ldpc_count,ldpc_failures,"
           "ldpc_bg1_count,ldpc_bg2_count,"
-          "rlc_retx_count\n");
+          "rlc_retx_count,"
+          "late_packet_count,underflow_count\n");
   clock_gettime(CLOCK_MONOTONIC, &g_start_ts);
   atexit(close_csv);
   LOG_I(NR_MAC, "nr_ue_stats: writing CSV to '%s'\n", path);
@@ -95,11 +97,14 @@ void nr_ue_stats_dump_and_reset(void)
   uint_fast32_t ldpc_bg1 = atomic_exchange_explicit(&g_stats.ldpc_bg1_count, 0, memory_order_relaxed);
   uint_fast32_t ldpc_bg2 = atomic_exchange_explicit(&g_stats.ldpc_bg2_count, 0, memory_order_relaxed);
   uint_fast32_t rlc_retx = atomic_exchange_explicit(&g_stats.rlc_retx_count, 0, memory_order_relaxed);
+  uint64_t late_packets_cnt = g_callbacks.total_getter();
+  uint64_t underflow_cnt = g_callbacks.underflow_getter();
 
   g_stats.rsrp_sum = 0;
   g_stats.rsrp_count = 0;
   g_stats.sinr_sum = 0.0;
   g_stats.sinr_count = 0;
+  g_callbacks.resetter();
 
   if (rsrp_cnt == 0 && sinr_cnt == 0 && ldpc_cnt == 0 && rlc_retx == 0)
     return;
@@ -137,7 +142,9 @@ void nr_ue_stats_dump_and_reset(void)
       fprintf(csv, ",,0,0,");
     }
 
-    fprintf(csv, "%u,%u,%u\n", (uint32_t)ldpc_bg1, (uint32_t)ldpc_bg2, (uint32_t)rlc_retx);
+    fprintf(csv, "%u,%u,%u,", (uint32_t)ldpc_bg1, (uint32_t)ldpc_bg2, (uint32_t)rlc_retx);
+
+    fprintf(csv, "%u,%u\n", (uint32_t)late_packets_cnt, (uint32_t)underflow_cnt);
   }
   g_period_idx++;
 
@@ -169,6 +176,25 @@ void nr_ue_stats_dump_and_reset(void)
   }
   if (rlc_retx > 0)
     LOG_I(NR_MAC, "  RLC:     %u retransmissions\n", (uint32_t)rlc_retx);
+  if (late_packets_cnt || underflow_cnt) {
+    // LOG_I(NR_MAC, "  Late Packets: %" PRIu64 " total, Tx %" PRIu64 ", Rx %" PRIu64 ", Async %" PRIu64 "\n", g_callbacks.total_getter(), g_callbacks.rx_getter(), g_callbacks.tx_getter(), g_callbacks.async_getter());
+    LOG_I(NR_MAC, "  Late Packets: %" PRIu64 ", Underflows: %" PRIu64 "\n", late_packets_cnt, underflow_cnt);
+  }
+}
+
+void nr_ue_stats_register_late_count_callbacks(uint64_t (*async_getter)(),
+                                               uint64_t (*rx_getter)(),
+                                               uint64_t (*tx_getter)(),
+                                               uint64_t (*total_getter)(),
+                                               uint64_t (*underflow_getter)(),
+                                               void (*resetter)())
+{
+  g_callbacks.async_getter = async_getter;
+  g_callbacks.rx_getter = rx_getter;
+  g_callbacks.tx_getter = tx_getter;
+  g_callbacks.total_getter = total_getter;
+  g_callbacks.underflow_getter = underflow_getter;
+  g_callbacks.resetter = resetter;
 }
 
 void nr_ue_stats_tick(int frame, int slot)

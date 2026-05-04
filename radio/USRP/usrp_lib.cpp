@@ -1,3 +1,4 @@
+// clang-format off
 /*
  * Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -46,6 +47,7 @@
 #include <fstream>
 #include <cmath>
 #include <time.h>
+#include <uhd/utils/late_packet_counter.hpp>
 #include "common/utils/LOG/log.h"
 #include "common_lib.h"
 #include "assertions.h"
@@ -1058,6 +1060,45 @@ static void usrp_sync_pps(usrp_state_t *s)
 }
 
 extern "C" {
+// clang-format on
+__attribute__((weak)) void nr_ue_stats_register_late_count_callbacks(uint64_t (*async_getter)(),
+                                                                     uint64_t (*rx_getter)(),
+                                                                     uint64_t (*tx_getter)(),
+                                                                     uint64_t (*total_getter)(),
+                                                                     uint64_t (*undeflow_getter)(),
+                                                                     void (*resetter)());
+
+static uint64_t usrp_get_async_late()
+{
+  return uhd::utils::get_async_msg_late_count();
+}
+
+static uint64_t usrp_get_rx_late()
+{
+  return uhd::utils::get_rx_late_count();
+}
+
+static uint64_t usrp_get_tx_late()
+{
+  return uhd::utils::get_tx_late_count();
+}
+
+static uint64_t usrp_get_total_late()
+{
+  return uhd::utils::get_total_late_count();
+}
+
+static uint64_t usrp_get_underflow()
+{
+  return uhd::utils::get_underflow_count();
+}
+
+static void usrp_reset_lates()
+{
+  uhd::utils::reset_late_counts();
+}
+// clang-format off
+
   int device_init(openair0_device_t *device, openair0_config_t *openair0_cfg)
   {
     LOG_I(HW, "openair0_cfg[0].sdr_addrs == '%s'\n", openair0_cfg[0].sdr_addrs);
@@ -1084,6 +1125,8 @@ extern "C" {
     device->trx_set_gains_func   = trx_usrp_set_gains;
     device->trx_write_init = trx_usrp_write_init;
 
+    if (nr_ue_stats_register_late_count_callbacks)
+      nr_ue_stats_register_late_count_callbacks(usrp_get_async_late, usrp_get_rx_late, usrp_get_tx_late, usrp_get_total_late, usrp_get_underflow, usrp_reset_lates);
 
     // hotfix! to be checked later
     //uhd::set_thread_priority_safe(1.0);
