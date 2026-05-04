@@ -25,7 +25,7 @@ typedef struct {
   atomic_uint_fast32_t rlc_retx_count; /// Total number of RLC retransmissions
 } nr_ue_stats_t;
 
-/// Struct for USRP Callbacks
+/// Struct for USRP late packets / underflows getters callbacks
 typedef struct {
   uint64_t (*async_getter)();
   uint64_t (*rx_getter)();

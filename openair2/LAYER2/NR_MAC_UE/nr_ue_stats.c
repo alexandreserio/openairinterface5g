@@ -118,15 +118,13 @@ void nr_ue_stats_dump_and_reset(void)
     fprintf(csv, "%" PRIu64 ",%.3f,", g_period_idx, elapsed);
     if (rsrp_cnt > 0) {
       fprintf(csv, "%.3f,%u,", (double)rsrp_sum / rsrp_cnt, rsrp_cnt);
-    }
-    else {
+    } else {
       fprintf(csv, ",0,");
     }
 
     if (sinr_cnt > 0) {
       fprintf(csv, "%.3f,%u,", sinr_sum / sinr_cnt, sinr_cnt);
-    }
-    else {
+    } else {
       fprintf(csv, ",0,");
     }
 
@@ -137,8 +135,7 @@ void nr_ue_stats_dump_and_reset(void)
               (double)ldpc_fail / ldpc_cnt,
               (uint32_t)ldpc_cnt,
               (uint32_t)ldpc_fail);
-    }
-    else {
+    } else {
       fprintf(csv, ",,0,0,");
     }
 
@@ -177,7 +174,8 @@ void nr_ue_stats_dump_and_reset(void)
   if (rlc_retx > 0)
     LOG_I(NR_MAC, "  RLC:     %u retransmissions\n", (uint32_t)rlc_retx);
   if (late_packets_cnt || underflow_cnt) {
-    // LOG_I(NR_MAC, "  Late Packets: %" PRIu64 " total, Tx %" PRIu64 ", Rx %" PRIu64 ", Async %" PRIu64 "\n", g_callbacks.total_getter(), g_callbacks.rx_getter(), g_callbacks.tx_getter(), g_callbacks.async_getter());
+    // LOG_I(NR_MAC, "  Late Packets: %" PRIu64 " total, Tx %" PRIu64 ", Rx %" PRIu64 ", Async %" PRIu64 "\n",
+    // g_callbacks.total_getter(), g_callbacks.rx_getter(), g_callbacks.tx_getter(), g_callbacks.async_getter());
     LOG_I(NR_MAC, "  Late Packets: %" PRIu64 ", Underflows: %" PRIu64 "\n", late_packets_cnt, underflow_cnt);
   }
 }
