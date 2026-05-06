@@ -16,7 +16,94 @@
 #include "PHY/sse_intrin.h"
 #include "T.h"
 #include "T_messages_creator.h"
+#include "PHY/NR_TRANSPORT/iq_frame.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <time.h>
 #include <sys/time.h>
+#include <unistd.h>
+
+#define IQ_FIFO_PATH "/tmp/oai_iq.pipe"
+#define IQ_FRAME_SAMPLES 2000
+
+static pthread_mutex_t iq_fifo_lock = PTHREAD_MUTEX_INITIALIZER;
+static int iq_fifo_fd = -1;
+static uint64_t iq_frame_id = 0;
+static int16_t iq_samples[IQ_FRAME_SAMPLES * 2];
+static uint32_t iq_sample_count = 0;
+
+static inline uint64_t get_time_ns(void)
+{
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  return ((uint64_t)ts.tv_sec * 1000000000ULL) + ts.tv_nsec;
+}
+
+static inline void iq_fifo_open_if_needed(void)
+{
+  if (iq_fifo_fd >= 0)
+    return;
+
+  iq_fifo_fd = open(IQ_FIFO_PATH, O_WRONLY | O_NONBLOCK);
+}
+
+static inline void iq_fifo_close(void)
+{
+  if (iq_fifo_fd >= 0) {
+    close(iq_fifo_fd);
+    iq_fifo_fd = -1;
+  }
+}
+
+static void iq_fifo_flush_locked(void)
+{
+  if (iq_sample_count < IQ_FRAME_SAMPLES)
+    return;
+
+  iq_fifo_open_if_needed();
+  if (iq_fifo_fd >= 0) {
+    iq_frame_hdr_t hdr = {
+      .magic = IQ_FRAME_MAGIC,
+      .version = 1,
+      .format = IQ_FMT_INT16,
+      .reserved = 0,
+      .frame_id = iq_frame_id++,
+      .timestamp_ns = get_time_ns(),
+      .sample_count = IQ_FRAME_SAMPLES,
+      .rnti = 0,
+      .reserved2 = 0,
+    };
+
+    ssize_t ret = write(iq_fifo_fd, &hdr, sizeof(hdr));
+    if (ret == (ssize_t)sizeof(hdr))
+      ret = write(iq_fifo_fd, iq_samples, sizeof(iq_samples));
+
+    if (ret < 0 && (errno == EPIPE || errno == EAGAIN || errno == EWOULDBLOCK))
+      iq_fifo_close();
+  }
+
+  iq_sample_count = 0;
+}
+
+static inline void iq_fifo_push_comp_samples(simde__m256i comp)
+{
+  int16_t iq_data[16];
+  simde_mm256_storeu_si256((simde__m256i *)iq_data, comp);
+
+  pthread_mutex_lock(&iq_fifo_lock);
+  for (int j = 0; j < 16; j += 2) {
+    if (iq_sample_count < IQ_FRAME_SAMPLES) {
+      iq_samples[iq_sample_count * 2] = iq_data[j];
+      iq_samples[iq_sample_count * 2 + 1] = iq_data[j + 1];
+      iq_sample_count++;
+    }
+
+    if (iq_sample_count >= IQ_FRAME_SAMPLES)
+      iq_fifo_flush_locked();
+  }
+  pthread_mutex_unlock(&iq_fifo_lock);
+}
 
 
 #if T_TRACER
@@ -226,106 +313,8 @@ static void nr_ulsch_channel_compensation(uint32_t buffer_length,
       {
         // MRC        
         simde__m256i comp = oai_mm256_cpx_mult_conj(chF_256[i], rxF_256[i], output_shift);
-        rxComp_256[i] = simde_mm256_add_epi16(rxComp_256[i], comp);
-        
-        static FILE *iq_file = NULL;
-        static int16_t reservoir[16000]; 
-        static int sample_count = 0;
-        static int frame_sample_count = 0;
-        static const int K = 8000; // samples to keep
-        static int current_frame = -1;
-        static unsigned int rng_state = 123456789; // LCG seed
-        static int first_run = 1;
-        static int last_symbol = -1;
-        static time_t last_sample_time = 0;
-        time_t current_time = time(NULL);
-
-        // Add reconnection detection
-        // Reset if no samples for more than 5 seconds (connection lost)
-        if (current_time - last_sample_time > 5) {
-            LOG_D(UTIL, "DEBUG: Connection restored, resetting sampling\n");
-            first_run = 1;  // Reset file opening flag
-            current_frame = -1;  // Reset frame counter
-            sample_count = 0;
-            frame_sample_count = 0;
-        }
-        last_sample_time = current_time;
-        // ONLY sample for first antenna/layer combination to avoid duplicates
-        if (aatx == 0 && aarx == 0) {
-            // Open file 
-            if (first_run) {
-                iq_file = fopen("/home/oai/IQ_Samples/samples.csv", "w");
-                if (iq_file) {
-                    fprintf(iq_file, "I,Q\n"); 
-                    fflush(iq_file);
-                    LOG_W(UTIL, "DEBUG: CSV file opened successfully\n"); //ADRIANO
-                } else {
-                    LOG_D(UTIL, "DEBUG: Failed to open CSV file\n"); //ADRIANO
-                }
-                first_run = 0;
-            }
-
-            // Extract I and Q samples FIRST
-            int16_t iq_samples[16]; 
-            simde_mm256_storeu_si256((simde__m256i*)iq_samples, rxComp_256[i]);
-
-            // R algorithm - collect samples
-            for (int j = 0; j < 16; j += 2) {
-                if (sample_count < K) {
-                    // Fill reservoir up to K samples
-                    reservoir[sample_count * 2] = iq_samples[j];      // I
-                    reservoir[sample_count * 2 + 1] = iq_samples[j+1]; // Q
-                } else {
-                    // Reservoir is full, use replacement algorithm
-                    rng_state = rng_state * 1103515245 + 12345;
-                    int rand_index = rng_state % (sample_count + 1);
-                    if (rand_index < K) {
-                        // Replace sample in reservoir
-                        reservoir[rand_index * 2] = iq_samples[j];      // I
-                        reservoir[rand_index * 2 + 1] = iq_samples[j+1]; // Q
-                    }
-                }
-                sample_count++;
-                frame_sample_count++;
-            }
-
-            // Write ALL reservoir samples when it's full (5000 samples)
-            if (sample_count == K) {  // Exactly when reservoir becomes full
-                LOG_D(UTIL, "DEBUG: Reservoir is full with %d samples, writing all to file\n", K);
-
-                if (iq_file) {
-                    // Overwrite file with all reservoir data
-                    fseek(iq_file, 0, SEEK_SET);
-                    fprintf(iq_file, "I,Q\n"); // Write header again
-
-                    // Write ALL 5000 samples from reservoir
-                    for (int k = 0; k < K; k++) {
-                        fprintf(iq_file, "%d,%d\n", reservoir[k*2], reservoir[k*2+1]);
-                    }
-                    fflush(iq_file);
-
-                    // Truncate file to remove any old data
-                    int fd = fileno(iq_file);
-                    if (fd != -1) {
-                        ftruncate(fd, ftell(iq_file));
-                    }
-                    LOG_D(UTIL, "DEBUG: Successfully wrote all %d reservoir samples to file\n", K);
-                }
-
-                // Reset counters to start collecting next batch
-                sample_count = 0;
-                frame_sample_count = 0;
-                current_frame++;
-            }
-
-            // Debug print every 1000 samples collected
-            if (frame_sample_count > 0 && frame_sample_count % 1000 == 0) {
-                LOG_D(UTIL, "DEBUG: Collected %d samples so far (reservoir size: %d/%d)\n", 
-                       frame_sample_count, (sample_count < K) ? sample_count : K, K);
-            }
-
-           // last_symbol = symbol;
-        }
+        rxComp_256[i] = simde_mm256_add_epi16(rxComp_256[i], comp); 
+        iq_fifo_push_comp_samples(comp);
 
         if (mod_order > 2) {
           simde__m256i mag = oai_mm256_smadd(chF_256[i], chF_256[i], output_shift); // |h|^2

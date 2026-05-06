@@ -3,6 +3,7 @@
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <inttypes.h>
 #include <pthread.h>
 #include <sched.h>
@@ -11,6 +12,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include "NR_DRB-ToAddMod.h"
 #include "NR_DRB-ToAddModList.h"
@@ -36,17 +39,62 @@
 #include "nr_rlc/nr_rlc_oai_api.h"
 #include "openair2/F1AP/f1ap_ids.h"
 #include "openair2/F1AP/lib/f1ap_interface_management.h"
+#include "openair2/RRC/NR/rrc_gNB_UE_context.h"
 #include "seq_arr.h"
 #include "system.h"
 #include "time_meas.h"
 #include "utils.h"
 
 #define MACSTATSSTRLEN 36256
+#define NRMAC_STATS_FIFO "/tmp/oai_metrics.pipe"
+
+static int ensure_nrmac_stats_fifo(void)
+{
+  struct stat st = {0};
+  // Verifica se o FIFO ja existe e tem o tipo correto. Se  nao tenta usar ou recriar 
+  if (stat(NRMAC_STATS_FIFO, &st) == 0) {
+    if (S_ISFIFO(st.st_mode))
+      return 0;
+    LOG_W(NR_MAC, "%s exists and is not a FIFO, disabling FIFO stats output\n", NRMAC_STATS_FIFO);
+    return -1;
+  }
+
+  if (errno != ENOENT) {
+    LOG_W(NR_MAC, "Cannot stat %s: %d, %s\n", NRMAC_STATS_FIFO, errno, strerror(errno));
+    return -1;
+  }
+
+  if (mkfifo(NRMAC_STATS_FIFO, 0666) != 0 && errno != EEXIST) {
+    LOG_W(NR_MAC, "Cannot create %s: %d, %s\n", NRMAC_STATS_FIFO, errno, strerror(errno));
+    return -1;
+  }
+
+  return 0;
+}
+
+static void write_nrmac_stats_fifo(const char *output, size_t len)
+{
+  // escrita non-blocking para evitar travar a thread de estatisticas caso nao haja leitores do outro lado do FIFO
+  int fd = open(NRMAC_STATS_FIFO, O_WRONLY | O_NONBLOCK);
+  if (fd < 0) {
+    if (errno != ENXIO && errno != ENOENT)
+      LOG_W(NR_MAC, "Cannot open %s: %d, %s\n", NRMAC_STATS_FIFO, errno, strerror(errno));
+    return;
+  }
+
+  ssize_t written = write(fd, output, len);
+  if (written < 0) {
+    if (errno != EPIPE)
+      LOG_W(NR_MAC, "Cannot write %s: %d, %s\n", NRMAC_STATS_FIFO, errno, strerror(errno));
+  }
+  close(fd);
+}
 
 void *nrmac_stats_thread(void *arg) {
 
   gNB_MAC_INST *gNB = (gNB_MAC_INST *)arg;
 
+  // thread para exportat as stats MAC para o nrMac_stats.log e  para a FIFO para consumo externo
   char output[MACSTATSSTRLEN] = {0};
   const char *end = output + MACSTATSSTRLEN;
   FILE *file = fopen("nrMAC_stats.log","w");
@@ -55,8 +103,11 @@ void *nrmac_stats_thread(void *arg) {
     return NULL;
   }
 
+  const bool fifo_ready = ensure_nrmac_stats_fifo() == 0;
+
   while (oai_exit == 0) {
-    char *p = output;
+    char *p = output; 
+    // escrita para os logfile e fifo
     NR_SCHED_LOCK(&gNB->sched_lock);
     p += dump_mac_stats(gNB, p, end - p, false);
     p += snprintf(p, end - p, "\n");
@@ -74,7 +125,10 @@ void *nrmac_stats_thread(void *arg) {
       LOG_E(NR_MAC, "error while writing nrMAC_stats.log: %d, %s\n", errno, strerror(errno));
       break;
     }
+    if (fifo_ready)
+      write_nrmac_stats_fifo(output, len);
     sleep(1);
+    // reaproveita o arquivo de log 
     if (ftruncate(fileno(file), 0) != 0 || fseek(file, 0, SEEK_SET) != 0) {
       LOG_E(NR_MAC, "error while writing nrMAC_stats.log: %d, %s\n", errno, strerror(errno));
       break;
@@ -85,9 +139,20 @@ void *nrmac_stats_thread(void *arg) {
 }
 
 void clear_mac_stats(gNB_MAC_INST *gNB) {
+  // limpa as stats MAC
   UE_iterator(gNB->UE_info.connected_ue_list, UE) {
     memset(&UE->mac_stats,0,sizeof(UE->mac_stats));
   }
+}
+
+static bool has_established_pdu_session(const gNB_RRC_UE_t *ue_context)
+{
+  // usa o rrc para verificar se existe pdu establecida para este UE
+  FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t *, pdu, &ue_context->pduSessions) {
+    if (pdu->status == PDU_SESSION_STATUS_ESTABLISHED || pdu->status == PDU_SESSION_STATUS_REESTABLISHED)
+      return true;
+  }
+  return false;
 }
 
 static char *st_append(char *start, const char *end, const char *format, ...)
@@ -103,27 +168,47 @@ static char *st_append(char *start, const char *end, const char *format, ...)
     return (char *)end;
 }
 
+static const char *get_gnb_name(const gNB_MAC_INST *gNB)
+{
+  if (gNB->f1_config.setup_req && gNB->f1_config.setup_req->gNB_DU_name)
+    return gNB->f1_config.setup_req->gNB_DU_name;
+
+  const gNB_RRC_INST *rrc = RC.nrrrc ? RC.nrrrc[gNB->Mod_id] : NULL;
+  if (rrc && rrc->node_name)
+    return rrc->node_name;
+
+  return NULL;
+}
+
 size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset_rsrp)
 {
-  FILE* file; //ADDED ALEX
-  file = fopen("gnb_measurements.md", "a"); //ADDED ALEX
-  if(file == NULL){ //ADDED ALEX
-    LOG_E(UTIL, "fopen() failed\n");
-  }
-
   const char *begin = output;
   const char *end = output + strlen;
-
+  const bool have_du_id = gNB->f1_config.setup_req != NULL;
+  const char *gnb_name = get_gnb_name(gNB);
   /* this function is called from gNB_dlsch_ulsch_scheduler(), so assumes the
    * scheduler to be locked*/
   NR_SCHED_ENSURE_LOCKED(&gNB->sched_lock);
 
+  // extra header para dar mais contexto sobre a identidade dos UEs
+  output = st_append(output, end, "gNB ID %u (0x%06X)", gNB->f1_config.gnb_id, gNB->f1_config.gnb_id);
+  if (gnb_name)
+    output = st_append(output, end, " gNB name %s", gnb_name);
+  if (have_du_id)
+    output = st_append(output, end, " gNB_DU_ID %" PRIu64, gNB->f1_config.setup_req->gNB_DU_id);
+  else
+    output = st_append(output, end, " gNB_DU_ID (none)");
+  output = st_append(output, end, "\n");
+
   UE_iterator(gNB->UE_info.connected_ue_list, UE) {
     NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
     NR_mac_stats_t *stats = &UE->mac_stats;
+    const gNB_RRC_INST *rrc = RC.nrrrc ? RC.nrrrc[gNB->Mod_id] : NULL;
+    const rrc_gNB_ue_context_t *rrc_ue_context = rrc ? rrc_gNB_get_ue_context_by_rnti_any_du((gNB_RRC_INST *)rrc, UE->rnti) : NULL;
     const int avg_rsrp = stats->num_rsrp_meas > 0 ? stats->cumul_rsrp / stats->num_rsrp_meas : 0;
     const int avg_sinrx10 = stats->num_sinr_meas > 0 ? stats->cumul_sinrx10 / stats->num_sinr_meas : 0;
 
+    // junta toda a info RRC e F1 disponivel 
     output = st_append(output, end, "UE RNTI %04x CU-UE-ID ", UE->rnti);
     if (du_exists_f1_ue_data(UE->rnti)) {
       f1_ue_data_t ued = du_get_f1_ue_data(UE->rnti);
@@ -132,22 +217,40 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
       output = st_append(output, end, "(none)");
     }
 
+    output = st_append(output, end, " RAN-UE-NGAP-ID ");
+    if (rrc_ue_context) {
+      output = st_append(output, end, "%u", rrc_ue_context->ue_context.rrc_ue_id);
+    } else {
+      output = st_append(output, end, "(none)");
+    }
+
+    output = st_append(output, end, " AMF-UE-NGAP-ID ");
+    if (rrc_ue_context && rrc_ue_context->ue_context.amf_ue_ngap_id != INT64_MAX) {
+      output = st_append(output, end, "%" PRIu64, rrc_ue_context->ue_context.amf_ue_ngap_id);
+    } else {
+      output = st_append(output, end, "(none)");
+    }
+
+    output = st_append(output,
+                       end,
+                       " PDU-Session established %s",
+                       rrc_ue_context && has_established_pdu_session(&rrc_ue_context->ue_context) ? "yes" : "no");
+
     bool in_sync = !sched_ctrl->ul_failure;
     output = st_append(output,
                        end,
                        " %s PH %d dB PCMAX %d dBm",
-                       in_sync ? "\e[1;32m in-sync \e[0m" : "\e[1;31m out-of-sync \e[0m",
+                       in_sync ? "in-sync" : "out-of-sync",
                        sched_ctrl->ph,
                        sched_ctrl->pcmax);
 
     if (stats->num_rsrp_meas)
-      output = st_append(output, end, ",\e[0;36m average RSRP \e[1;36m%d\e[0;36m (%d meas)\e[0m", avg_rsrp, stats->num_rsrp_meas);
+      output = st_append(output, end, ", average RSRP %d (%d meas)", avg_rsrp, stats->num_rsrp_meas);
 
     if (stats->num_sinr_meas) {
       output = st_append(output,
                          end,
                          ", average SINR %d.%d (%d meas)",
-                         ",\e[0;36m average SINR \e[1;36m%d.%d\e[0;36m (%d meas)\e[0m",
                          avg_sinrx10 / 10,
                          avg_sinrx10 % 10,
                          stats->num_sinr_meas);
@@ -180,7 +283,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     float pucch_snr_diff = (pucch_snr * 10.0f - sched_ctrl->pucch_pc.target_snrx10) / 10.0f;
     output = st_append(output,
                        end,
-                       ", dlsch_errors %"PRIu64", pucch0_DTX %d (\e[0;36mSNR\e[1;36m %.1f dB (%+.1f)\e[0m), \e[0;36mBLER\e[1;36m %.5f\e[0m MCS (%d) %d CCE fail %d\n",
+                       ", dlsch_errors %"PRIu64", pucch0_DTX %d (SNR %.1f%+.1f dB), BLER %.5f MCS (%d) %d CCE fail %d\n",
                        stats->dl.errors,
                        stats->pucch0_DTX,
                        pucch_snr,
@@ -189,9 +292,6 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                        UE->current_DL_BWP.mcsTableIdx,
                        sched_ctrl->dl_bler_stats.mcs,
                        sched_ctrl->dl_cce_fail);
-
-    fprintf(file, "dlsch_errors %"PRIu64" | SNR %.1f dB (%+.1f) | avg_RSRP %d (meas %d) | DL_BLER %.5f\n", stats->dl.errors, pucch_snr, pucch_snr_diff, avg_rsrp, stats->num_rsrp_meas, sched_ctrl->dl_bler_stats.bler); //ADDED ALEX
-
     if (reset_rsrp) {
       stats->num_rsrp_meas = 0;
       stats->cumul_rsrp = 0;
@@ -209,7 +309,7 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     float diff_target = (snr * 10.0f - sched_ctrl->pusch_pc.target_snrx10) / 10.0f;
     output = st_append(output,
                        end,
-                       ", ulsch_errors %"PRIu64", ulsch_DTX %d, \e[0;36mBLER\e[1;36m %.5f\e[0m MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d \e[0;36mSNR\e[1;36m %.1f dB (%+.1f)\e[0m CCE fail %d\n",
+                       ", ulsch_errors %"PRIu64", ulsch_DTX %d, BLER %.5f MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d SNR %.1f (%+.1f) dB CCE fail %d\n",
                        stats->ul.errors,
                        stats->ulsch_DTX,
                        sched_ctrl->ul_bler_stats.bler,
@@ -221,9 +321,6 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                        snr,
                        diff_target,
                        sched_ctrl->ul_cce_fail);
-
-    fprintf(file, "UL_BLER %.5f SNR %.1f dB (%+.1f)\n", sched_ctrl->dl_bler_stats.bler, snr, diff_target); //ADDED ALEX
-
    output = st_append(output,
                        end,
                        "UE %04x: MAC:    TX %14"PRIu64" RX %14"PRIu64" bytes\n",
@@ -241,12 +338,12 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     }
   }
   DevAssert(output <= end);
-  fclose(file); //ADDED ALEX
   return output - begin;
 }
 
 static void mac_rrc_init(gNB_MAC_INST *mac, ngran_node_t node_type)
 {
+  /* Seleciona o caminho de integracao RRC conforme o papel do no. */
   switch (node_type) {
     case ngran_gNB_CU:
       AssertFatal(1 == 0, "nothing to do for CU\n");
@@ -292,6 +389,7 @@ void mac_top_init_gNB(ngran_node_t node_type,
       
       RC.nrmac[i]->Mod_id = i;
 
+      // set values para o scheduler e HARQ, que sao usados mesmo antes de receber a configuracao RRC completa do gNB
       RC.nrmac[i]->tag = (NR_TAG_t*)malloc(sizeof(NR_TAG_t));
       memset((void*)RC.nrmac[i]->tag,0,sizeof(NR_TAG_t));
       for(int n = 0; n < MAX_NUM_OF_SSB; n++)
@@ -307,7 +405,6 @@ void mac_top_init_gNB(ngran_node_t node_type,
       RC.nrmac[i]->cset0_bwp_start = 0;
       RC.nrmac[i]->cset0_bwp_size = 0;
 
-      RC.nrmac[i]->ul_next = (fsn_t) {.mu = *scc->ssbSubcarrierSpacing};
       RC.nrmac[i]->print_ue_stats = true;
 
       pthread_mutex_init(&RC.nrmac[i]->sched_lock, NULL);
@@ -318,8 +415,8 @@ void mac_top_init_gNB(ngran_node_t node_type,
         RC.nrmac[i]->pre_processor_dl = nr_preprocessor_phytest;
         RC.nrmac[i]->pre_processor_ul = nr_ul_preprocessor_phytest;
       } else {
-        RC.nrmac[i]->pre_processor_dl = nr_init_dlsch_preprocessor();
-        RC.nrmac[i]->pre_processor_ul = nr_init_ulsch_preprocessor();
+        RC.nrmac[i]->pre_processor_dl = nr_init_dlsch_preprocessor(0);
+        RC.nrmac[i]->pre_processor_ul = nr_init_ulsch_preprocessor(0);
       }
       if (!IS_SOFTMODEM_NOSTATS)
         threadCreate(&RC.nrmac[i]->stats_thread,
@@ -329,7 +426,7 @@ void mac_top_init_gNB(ngran_node_t node_type,
                      -1,
                      sched_get_priority_min(SCHED_OAI) + 1);
       mac_rrc_init(RC.nrmac[i], node_type);
-    }//END for (i = 0; i < RC.nb_nr_macrlc_inst; i++)
+    }
 
     nr_rlc_op_mode_t mode = NODE_IS_MONOLITHIC(node_type) ? NR_RLC_OP_MODE_MONO_GNB : NR_RLC_OP_MODE_SPLIT_GNB;
     int success = nr_rlc_module_init(mode);
@@ -338,7 +435,7 @@ void mac_top_init_gNB(ngran_node_t node_type,
     RC.nrmac = NULL;
   }
 
-  // Initialize Linked-List for Active UEs
+  // linked list para UEs ativos
   for (module_id_t i = 0; i < RC.nb_nr_macrlc_inst; i++) {
     gNB_MAC_INST *nrmac = RC.nrmac[i];
     nrmac->if_inst = NR_IF_Module_init(i);
@@ -352,6 +449,7 @@ void mac_top_init_gNB(ngran_node_t node_type,
 
 void mac_top_destroy_gNB(gNB_MAC_INST *mac)
 {
+  // destrou func liberta a memoria alocada 
   NR_COMMON_channels_t *cc = &mac->common_channels[0];
   ASN_STRUCT_FREE(asn_DEF_NR_BCCH_BCH_Message, cc->mib);
   ASN_STRUCT_FREE(asn_DEF_NR_BCCH_DL_SCH_Message, cc->sib1);
@@ -370,6 +468,7 @@ void mac_top_destroy_gNB(gNB_MAC_INST *mac)
 
 void nr_mac_send_f1_setup_req(void)
 {
+  // envia a setup request 
   gNB_MAC_INST *mac = RC.nrmac[0];
   DevAssert(mac);
   mac->mac_rrc.f1_setup_request(mac->f1_config.setup_req);
