@@ -3127,7 +3127,7 @@ static void handle_rar_reception(NR_UE_MAC_INST_t *mac, NR_MAC_RAR *rar, frame_t
   if (!nr_timer_is_active(&mac->time_alignment_timer)) {
     const int ta = rar->TA2 + (rar->TA1 << 5);
     set_time_alignment(mac, ta, rar_ta, frame_tx, slot_tx);
-    LOG_W(MAC, "received TA command %d\n", 31 + ta);
+    LOG_W(MAC, "received TA command %d (TA2 = %d // TA1 = %d)\n", 31 + ta, rar->TA2, rar->TA1<<5);
   }
   // else ignore the received Timing Advance Command
 
