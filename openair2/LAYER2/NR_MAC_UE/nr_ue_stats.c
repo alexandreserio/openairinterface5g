@@ -47,6 +47,8 @@ static FILE *open_csv(void)
           "sinr_avg_dB,sinr_count,"
           "ldpc_avg_iter,ldpc_fail_rate,ldpc_count,ldpc_failures,"
           "ldpc_bg1_count,ldpc_bg2_count,"
+          "ldpc_bg1_r13,ldpc_bg1_r23,ldpc_bg1_r89,"
+          "ldpc_bg2_r15,ldpc_bg2_r13,ldpc_bg2_r23,"
           "rlc_retx_count,"
           "late_packet_count,underflow_count\n");
   clock_gettime(CLOCK_MONOTONIC, &g_start_ts);
@@ -67,16 +69,30 @@ void nr_ue_stats_add_sinr(float sinr_dB)
   g_stats.sinr_count++;
 }
 
-void nr_ue_stats_add_ldpc(int iterations, int max_iterations, bool success, int BG)
+void nr_ue_stats_add_ldpc(int iterations, int max_iterations, bool success, int BG, int R)
 {
   atomic_fetch_add_explicit(&g_stats.ldpc_iter_sum, (uint_fast64_t)iterations, memory_order_relaxed);
   atomic_fetch_add_explicit(&g_stats.ldpc_count, 1, memory_order_relaxed);
-  if (!success)
+  if (!success) {
     atomic_fetch_add_explicit(&g_stats.ldpc_failures, 1, memory_order_relaxed);
-  if (BG == 1)
+  }
+  if (BG == 1) {
     atomic_fetch_add_explicit(&g_stats.ldpc_bg1_count, 1, memory_order_relaxed);
-  else if (BG == 2)
+    if (R == 13)
+      atomic_fetch_add_explicit(&g_stats.ldpc_bg1_r13_count, 1, memory_order_relaxed);
+    else if (R == 23)
+      atomic_fetch_add_explicit(&g_stats.ldpc_bg1_r23_count, 1, memory_order_relaxed);
+    else if (R == 89)
+      atomic_fetch_add_explicit(&g_stats.ldpc_bg1_r89_count, 1, memory_order_relaxed);
+  } else if (BG == 2) {
     atomic_fetch_add_explicit(&g_stats.ldpc_bg2_count, 1, memory_order_relaxed);
+    if (R == 15)
+      atomic_fetch_add_explicit(&g_stats.ldpc_bg2_r15_count, 1, memory_order_relaxed);
+    else if (R == 13)
+      atomic_fetch_add_explicit(&g_stats.ldpc_bg2_r13_count, 1, memory_order_relaxed);
+    else if (R == 23)
+      atomic_fetch_add_explicit(&g_stats.ldpc_bg2_r23_count, 1, memory_order_relaxed);
+  }
   (void)max_iterations;
 }
 
@@ -96,6 +112,12 @@ void nr_ue_stats_dump_and_reset(void)
   uint_fast32_t ldpc_fail = atomic_exchange_explicit(&g_stats.ldpc_failures, 0, memory_order_relaxed);
   uint_fast32_t ldpc_bg1 = atomic_exchange_explicit(&g_stats.ldpc_bg1_count, 0, memory_order_relaxed);
   uint_fast32_t ldpc_bg2 = atomic_exchange_explicit(&g_stats.ldpc_bg2_count, 0, memory_order_relaxed);
+  uint_fast32_t ldpc_bg1_r13 = atomic_exchange_explicit(&g_stats.ldpc_bg1_r13_count, 0, memory_order_relaxed);
+  uint_fast32_t ldpc_bg1_r23 = atomic_exchange_explicit(&g_stats.ldpc_bg1_r23_count, 0, memory_order_relaxed);
+  uint_fast32_t ldpc_bg1_r89 = atomic_exchange_explicit(&g_stats.ldpc_bg1_r89_count, 0, memory_order_relaxed);
+  uint_fast32_t ldpc_bg2_r15 = atomic_exchange_explicit(&g_stats.ldpc_bg2_r15_count, 0, memory_order_relaxed);
+  uint_fast32_t ldpc_bg2_r13 = atomic_exchange_explicit(&g_stats.ldpc_bg2_r13_count, 0, memory_order_relaxed);
+  uint_fast32_t ldpc_bg2_r23 = atomic_exchange_explicit(&g_stats.ldpc_bg2_r23_count, 0, memory_order_relaxed);
   uint_fast32_t rlc_retx = atomic_exchange_explicit(&g_stats.rlc_retx_count, 0, memory_order_relaxed);
   uint64_t late_packets_cnt = g_callbacks.total_getter();
   uint64_t underflow_cnt = g_callbacks.underflow_getter();
@@ -139,7 +161,16 @@ void nr_ue_stats_dump_and_reset(void)
       fprintf(csv, ",,0,0,");
     }
 
-    fprintf(csv, "%u,%u,%u,", (uint32_t)ldpc_bg1, (uint32_t)ldpc_bg2, (uint32_t)rlc_retx);
+    fprintf(csv, "%u,%u,", (uint32_t)ldpc_bg1, (uint32_t)ldpc_bg2);
+    fprintf(csv,
+            "%u,%u,%u,%u,%u,%u,",
+            (uint32_t)ldpc_bg1_r13,
+            (uint32_t)ldpc_bg1_r23,
+            (uint32_t)ldpc_bg1_r89,
+            (uint32_t)ldpc_bg2_r15,
+            (uint32_t)ldpc_bg2_r13,
+            (uint32_t)ldpc_bg2_r23);
+    fprintf(csv, "%u,", (uint32_t)rlc_retx);
 
     fprintf(csv, "%u,%u\n", (uint32_t)late_packets_cnt, (uint32_t)underflow_cnt);
   }
@@ -169,6 +200,26 @@ void nr_ue_stats_dump_and_reset(void)
             (uint32_t)ldpc_bg2,
             (uint32_t)bg_total,
             100.0 * ldpc_bg2 / bg_total);
+    }
+    if (ldpc_bg1 > 0) {
+      LOG_I(NR_MAC,
+            "  LDPC BG1 rates: 1/3 %u (%.1f%%), 2/3 %u (%.1f%%), 8/9 %u (%.1f%%)\n",
+            (uint32_t)ldpc_bg1_r13,
+            100.0 * ldpc_bg1_r13 / ldpc_bg1,
+            (uint32_t)ldpc_bg1_r23,
+            100.0 * ldpc_bg1_r23 / ldpc_bg1,
+            (uint32_t)ldpc_bg1_r89,
+            100.0 * ldpc_bg1_r89 / ldpc_bg1);
+    }
+    if (ldpc_bg2 > 0) {
+      LOG_I(NR_MAC,
+            "  LDPC BG2 rates: 1/5 %u (%.1f%%), 1/3 %u (%.1f%%), 2/3 %u (%.1f%%)\n",
+            (uint32_t)ldpc_bg2_r15,
+            100.0 * ldpc_bg2_r15 / ldpc_bg2,
+            (uint32_t)ldpc_bg2_r13,
+            100.0 * ldpc_bg2_r13 / ldpc_bg2,
+            (uint32_t)ldpc_bg2_r23,
+            100.0 * ldpc_bg2_r23 / ldpc_bg2);
     }
   }
   if (rlc_retx > 0)

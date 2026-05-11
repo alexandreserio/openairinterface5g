@@ -50,7 +50,7 @@
 #include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_interface.h"
 #include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_nr_interface.h"
 
-__attribute__((weak)) void nr_ue_stats_add_ldpc(int iterations, int max_iterations, bool success, int BG);
+__attribute__((weak)) void nr_ue_stats_add_ldpc(int iterations, int max_iterations, bool success, int BG, int R);
 
 /**
  * \typedef nrLDPC_decoding_parameters_t
@@ -219,7 +219,7 @@ static void nr_process_decode_segment(void *arg)
     *rdata->decodeSuccess = false;
   }
   if (nr_ue_stats_add_ldpc)
-    nr_ue_stats_add_ldpc(decodeIterations, p_decoderParms->numMaxIter, *rdata->decodeSuccess, p_decoderParms->BG);
+    nr_ue_stats_add_ldpc(decodeIterations, p_decoderParms->numMaxIter, *rdata->decodeSuccess, p_decoderParms->BG, p_decoderParms->R);
   stop_meas(rdata->p_ts_ldpc_decode);
 
   // Task completed

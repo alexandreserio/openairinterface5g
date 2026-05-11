@@ -21,6 +21,13 @@ typedef struct {
   atomic_uint_fast32_t ldpc_failures; /// Total number of LDPC failures
   atomic_uint_fast32_t ldpc_bg1_count; /// Number of decodes using BG1
   atomic_uint_fast32_t ldpc_bg2_count; /// Number of decodes using BG2
+  atomic_uint_fast32_t ldpc_bg1_r13_count; /// Number of decodes using BG1 1/3
+  atomic_uint_fast32_t ldpc_bg1_r23_count; /// Number of decodes using BG1 2/3
+  atomic_uint_fast32_t ldpc_bg1_r89_count; /// Number of decodes using BG1 8/9
+  atomic_uint_fast32_t ldpc_bg2_r15_count; /// Number of decodes using BG2 1/5
+  atomic_uint_fast32_t ldpc_bg2_r13_count; /// Number of decodes using BG2 1/3
+  atomic_uint_fast32_t ldpc_bg2_r23_count; /// Number of decodes using BG2 2/3
+
   // RLC
   atomic_uint_fast32_t rlc_retx_count; /// Total number of RLC retransmissions
 } nr_ue_stats_t;
@@ -37,7 +44,7 @@ typedef struct {
 
 void nr_ue_stats_add_rsrp(int rsrp_dBm);
 void nr_ue_stats_add_sinr(float sinr_dB);
-void nr_ue_stats_add_ldpc(int iterations, int max_iterations, bool success, int BG);
+void nr_ue_stats_add_ldpc(int iterations, int max_iterations, bool success, int BG, int R);
 void nr_ue_stats_add_rlc_retx(void);
 void nr_ue_stats_dump_and_reset(void);
 void nr_ue_stats_register_late_count_callbacks(uint64_t (*async_getter)(),
