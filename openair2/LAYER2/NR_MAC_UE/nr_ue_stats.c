@@ -50,6 +50,7 @@ static FILE *open_csv(void)
           "ldpc_bg1_r13,ldpc_bg1_r23,ldpc_bg1_r89,"
           "ldpc_bg2_r15,ldpc_bg2_r13,ldpc_bg2_r23,"
           "rlc_retx_count,"
+          "deadline_miss_count,"
           "late_packet_count,underflow_count\n");
   clock_gettime(CLOCK_MONOTONIC, &g_start_ts);
   atexit(close_csv);
@@ -101,6 +102,11 @@ void nr_ue_stats_add_rlc_retx(void)
   atomic_fetch_add_explicit(&g_stats.rlc_retx_count, 1, memory_order_relaxed);
 }
 
+void nr_ue_stats_add_deadline_miss(void)
+{
+  atomic_fetch_add_explicit(&g_stats.deadline_miss_count, 1, memory_order_relaxed);
+}
+
 void nr_ue_stats_dump_and_reset(void)
 {
   int64_t rsrp_sum = g_stats.rsrp_sum;
@@ -119,6 +125,7 @@ void nr_ue_stats_dump_and_reset(void)
   uint_fast32_t ldpc_bg2_r13 = atomic_exchange_explicit(&g_stats.ldpc_bg2_r13_count, 0, memory_order_relaxed);
   uint_fast32_t ldpc_bg2_r23 = atomic_exchange_explicit(&g_stats.ldpc_bg2_r23_count, 0, memory_order_relaxed);
   uint_fast32_t rlc_retx = atomic_exchange_explicit(&g_stats.rlc_retx_count, 0, memory_order_relaxed);
+  uint_fast32_t deadline_miss = atomic_exchange_explicit(&g_stats.deadline_miss_count, 0, memory_order_relaxed);
   uint64_t late_packets_cnt = g_callbacks.total_getter();
   uint64_t underflow_cnt = g_callbacks.underflow_getter();
 
@@ -128,7 +135,7 @@ void nr_ue_stats_dump_and_reset(void)
   g_stats.sinr_count = 0;
   g_callbacks.resetter();
 
-  if (rsrp_cnt == 0 && sinr_cnt == 0 && ldpc_cnt == 0 && rlc_retx == 0)
+  if (rsrp_cnt == 0 && sinr_cnt == 0 && ldpc_cnt == 0 && rlc_retx == 0 && deadline_miss == 0)
     return;
 
   FILE *csv = open_csv();
@@ -171,6 +178,7 @@ void nr_ue_stats_dump_and_reset(void)
             (uint32_t)ldpc_bg2_r13,
             (uint32_t)ldpc_bg2_r23);
     fprintf(csv, "%u,", (uint32_t)rlc_retx);
+    fprintf(csv, "%u,", (uint32_t)deadline_miss);
 
     fprintf(csv, "%u,%u\n", (uint32_t)late_packets_cnt, (uint32_t)underflow_cnt);
   }
@@ -224,6 +232,8 @@ void nr_ue_stats_dump_and_reset(void)
   }
   if (rlc_retx > 0)
     LOG_I(NR_MAC, "  RLC:     %u retransmissions\n", (uint32_t)rlc_retx);
+  if (deadline_miss > 0)
+    LOG_I(NR_MAC, "  TX:      %u deadline misses\n", (uint32_t)deadline_miss);
   if (late_packets_cnt || underflow_cnt) {
     // LOG_I(NR_MAC, "  Late Packets: %" PRIu64 " total, Tx %" PRIu64 ", Rx %" PRIu64 ", Async %" PRIu64 "\n",
     // g_callbacks.total_getter(), g_callbacks.rx_getter(), g_callbacks.tx_getter(), g_callbacks.async_getter());

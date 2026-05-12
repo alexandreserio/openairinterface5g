@@ -30,6 +30,9 @@ typedef struct {
 
   // RLC
   atomic_uint_fast32_t rlc_retx_count; /// Total number of RLC retransmissions
+
+  // TX deadline misses (radio TX slot deadline missed in nr-ue.c)
+  atomic_uint_fast32_t deadline_miss_count;
 } nr_ue_stats_t;
 
 /// Struct for USRP late packets / underflows getters callbacks
@@ -46,6 +49,7 @@ void nr_ue_stats_add_rsrp(int rsrp_dBm);
 void nr_ue_stats_add_sinr(float sinr_dB);
 void nr_ue_stats_add_ldpc(int iterations, int max_iterations, bool success, int BG, int R);
 void nr_ue_stats_add_rlc_retx(void);
+void nr_ue_stats_add_deadline_miss(void);
 void nr_ue_stats_dump_and_reset(void);
 void nr_ue_stats_register_late_count_callbacks(uint64_t (*async_getter)(),
                                                uint64_t (*rx_getter)(),
