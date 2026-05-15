@@ -50,7 +50,15 @@
 #include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_interface.h"
 #include "nfapi/open-nFAPI/nfapi/public_inc/nfapi_nr_interface.h"
 
-__attribute__((weak)) void nr_ue_stats_add_ldpc(int iterations, int max_iterations, bool success, int BG, int R);
+__attribute__((weak)) void nr_ue_stats_add_ldpc(int iterations,
+                                                int max_iterations,
+                                                bool success,
+                                                int BG,
+                                                int R,
+                                                int rv_index,
+                                                int Z,
+                                                int C,
+                                                uint32_t decode_us);
 
 /**
  * \typedef nrLDPC_decoding_parameters_t
@@ -218,9 +226,20 @@ static void nr_process_decode_segment(void *arg)
     memset(rdata->c, 0, K >> 3);
     *rdata->decodeSuccess = false;
   }
-  if (nr_ue_stats_add_ldpc)
-    nr_ue_stats_add_ldpc(decodeIterations, p_decoderParms->numMaxIter, *rdata->decodeSuccess, p_decoderParms->BG, p_decoderParms->R);
   stop_meas(rdata->p_ts_ldpc_decode);
+  if (nr_ue_stats_add_ldpc) {
+    double cpu_ghz = get_cpu_freq_GHz();
+    uint32_t decode_us = cpu_ghz > 0.0 ? (uint32_t)(rdata->p_ts_ldpc_decode->p_time / cpu_ghz / 1000.0) : 0;
+    nr_ue_stats_add_ldpc(decodeIterations,
+                         p_decoderParms->numMaxIter,
+                         *rdata->decodeSuccess,
+                         p_decoderParms->BG,
+                         p_decoderParms->R,
+                         rdata->rv_index,
+                         (int)rdata->Z,
+                         (int)rdata->C,
+                         decode_us);
+  }
 
   // Task completed
   completed_task_ans(rdata->ans);

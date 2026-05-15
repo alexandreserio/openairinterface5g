@@ -341,7 +341,7 @@ static void RU_write(nr_rxtx_thread_data_t *rxtxD, bool sl_tx_action, c16_t **tx
     }
     uint64_t current_time_us = current_time.tv_sec * 1e6 + current_time.tv_nsec / 1e3;
     if (current_time_us > deadline_us) {
-      nr_ue_stats_add_deadline_miss();
+      nr_ue_stats_add_deadline_miss((uint32_t)(current_time_us - deadline_us));
       static unsigned int deadline_warning_rate_limit = 0;
       if (deadline_warning_rate_limit % 1000 == 0) {
         LOG_W(PHY,
