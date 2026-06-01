@@ -669,7 +669,7 @@ static void config_common(gNB_MAC_INST *nrmac, const nr_mac_config_t *config, NR
 
   nrmac->ssb_SubcarrierOffset = cfg->ssb_table.ssb_subcarrier_offset.value;
   nrmac->ssb_OffsetPointA = cfg->ssb_table.ssb_offset_point_a.value;
-  LOG_D(NR_MAC,
+  LOG_W(NR_MAC,
         "ssb_OffsetPointA %d, ssb_SubcarrierOffset %d\n",
         cfg->ssb_table.ssb_offset_point_a.value,
         cfg->ssb_table.ssb_subcarrier_offset.value);

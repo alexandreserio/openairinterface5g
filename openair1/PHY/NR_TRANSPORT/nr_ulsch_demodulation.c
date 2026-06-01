@@ -25,13 +25,10 @@
 #include <unistd.h>
 
 #define IQ_FIFO_PATH "/tmp/oai_iq.pipe"
-#define IQ_FRAME_SAMPLES 2000
-
+#define IQ_FIFO_FRAME_STRIDE 32
 static pthread_mutex_t iq_fifo_lock = PTHREAD_MUTEX_INITIALIZER;
 static int iq_fifo_fd = -1;
 static uint64_t iq_frame_id = 0;
-static int16_t iq_samples[IQ_FRAME_SAMPLES * 2];
-static uint32_t iq_sample_count = 0;
 
 static inline uint64_t get_time_ns(void)
 {
@@ -56,9 +53,34 @@ static inline void iq_fifo_close(void)
   }
 }
 
-static void iq_fifo_flush_locked(void)
+static ssize_t iq_fifo_write_exact(int fd, const void *buffer, size_t size)
 {
-  if (iq_sample_count < IQ_FRAME_SAMPLES)
+  size_t total = 0;
+  const uint8_t *ptr = buffer;
+
+  while (total < size) {
+    ssize_t ret = write(fd, ptr + total, size - total);
+
+    if (ret > 0) {
+      total += (size_t)ret;
+      continue;
+    }
+
+    if (ret < 0 && errno == EINTR)
+      continue;
+
+    if (ret < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+      return -1;
+
+    return -1;
+  }
+
+  return (ssize_t)total;
+}
+
+static void iq_fifo_write_c16_frame_locked(const c16_t *samples, uint32_t sample_count)
+{
+  if (samples == NULL || sample_count == 0)
     return;
 
   iq_fifo_open_if_needed();
@@ -70,38 +92,35 @@ static void iq_fifo_flush_locked(void)
       .reserved = 0,
       .frame_id = iq_frame_id++,
       .timestamp_ns = get_time_ns(),
-      .sample_count = IQ_FRAME_SAMPLES,
+      .sample_count = sample_count,
       .rnti = 0,
       .reserved2 = 0,
     };
 
-    ssize_t ret = write(iq_fifo_fd, &hdr, sizeof(hdr));
+    ssize_t ret = iq_fifo_write_exact(iq_fifo_fd, &hdr, sizeof(hdr));
     if (ret == (ssize_t)sizeof(hdr))
-      ret = write(iq_fifo_fd, iq_samples, sizeof(iq_samples));
+      ret = iq_fifo_write_exact(iq_fifo_fd, samples, sample_count * sizeof(*samples));
 
     if (ret < 0 && (errno == EPIPE || errno == EAGAIN || errno == EWOULDBLOCK))
       iq_fifo_close();
+    else if (ret < 0)
+      iq_fifo_close();
   }
-
-  iq_sample_count = 0;
 }
 
-static inline void iq_fifo_push_comp_samples(simde__m256i comp)
+static inline void iq_fifo_write_c16_frame(const c16_t *samples, uint32_t sample_count)
 {
-  int16_t iq_data[16];
-  simde_mm256_storeu_si256((simde__m256i *)iq_data, comp);
-
-  pthread_mutex_lock(&iq_fifo_lock);
-  for (int j = 0; j < 16; j += 2) {
-    if (iq_sample_count < IQ_FRAME_SAMPLES) {
-      iq_samples[iq_sample_count * 2] = iq_data[j];
-      iq_samples[iq_sample_count * 2 + 1] = iq_data[j + 1];
-      iq_sample_count++;
-    }
-
-    if (iq_sample_count >= IQ_FRAME_SAMPLES)
-      iq_fifo_flush_locked();
+  if ((iq_frame_id % IQ_FIFO_FRAME_STRIDE) != 0) {
+    iq_frame_id++;
+    return;
   }
+
+  if (pthread_mutex_trylock(&iq_fifo_lock) != 0) {
+    iq_frame_id++;
+    return;
+  }
+
+  iq_fifo_write_c16_frame_locked(samples, sample_count);
   pthread_mutex_unlock(&iq_fifo_lock);
 }
 
@@ -314,7 +333,6 @@ static void nr_ulsch_channel_compensation(uint32_t buffer_length,
         // MRC        
         simde__m256i comp = oai_mm256_cpx_mult_conj(chF_256[i], rxF_256[i], output_shift);
         rxComp_256[i] = simde_mm256_add_epi16(rxComp_256[i], comp); 
-        iq_fifo_push_comp_samples(comp);
 
         if (mod_order > 2) {
           simde__m256i mag = oai_mm256_smadd(chF_256[i], chF_256[i], output_shift); // |h|^2
@@ -1158,6 +1176,9 @@ static void nr_pusch_symbol_processing(void *arg)
     for (int i = 0; i < end; i++)
       llr16[i] = llr_ptr[i] * s[i];
   }
+
+  const uint32_t scope_sz = frame_parms->N_RB_UL * NR_NB_SC_PER_RB * frame_parms->symbols_per_slot;
+  iq_fifo_write_c16_frame(pusch_vars->rxdataF_comp[0], scope_sz);
 
   // Task running in // completed
   completed_task_ans(rdata->ans);
