@@ -646,6 +646,7 @@ void *E1AP_CUCP_task(void *arg)
         break;
 
       case SCTP_DATA_IND:
+        LOG_W(E1AP, "SCTP DATA IND case. Task handle sctp called at E1AP_CUCP"); //ALEX DEBUG deprioritizationReq
         e1_task_handle_sctp_data_ind(myInstance, &msg->ittiMsg.sctp_data_ind);
         break;
 
@@ -723,6 +724,7 @@ void *E1AP_CUUP_task(void *arg)
         break;
 
       case SCTP_DATA_IND:
+        LOG_W(E1AP, "SCTP DATA IND case. Task handle sctp called at E1AP_CUUP"); //ALEX DEBUG deprioritizationReq
         e1_task_handle_sctp_data_ind(myInstance, &msg->ittiMsg.sctp_data_ind);
         break;
 
