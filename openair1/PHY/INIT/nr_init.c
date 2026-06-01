@@ -50,6 +50,8 @@ int l1_north_init_gNB()
 
 NR_gNB_PHY_STATS_t *get_phy_stats(PHY_VARS_gNB *gNB, uint16_t rnti)
 {
+  // TODO reimplement with hashtable? also called from both UL/DL => not
+  // thread-safe
   NR_gNB_PHY_STATS_t *stats;
   int first_free = -1;
   for (int i = 0; i < MAX_MOBILES_PER_GNB; i++) {
@@ -100,7 +102,7 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
 
   int Ptx = cfg->carrier_config.num_tx_ant.value;
   int Prx = cfg->carrier_config.num_rx_ant.value;
-  int max_ul_mimo_layers = 4;
+  int max_ul_mimo_layers = NR_MAX_NB_LAYERS;
 
   AssertFatal(Ptx > 0 && Ptx < 9,"Ptx %d is not supported\n", Ptx);
   AssertFatal(Prx > 0 && Prx < 9,"Prx %d is not supported\n", Prx);
@@ -117,8 +119,6 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
 
   nr_init_fde(); // Init array for frequency equalization of transform precoding of PUSCH
 
-  int ret_loader = load_nrLDPC_coding_interface(NULL, &gNB->nrLDPC_coding_interface);
-  AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
   gNB->max_nb_pdsch = MAX_MOBILES_PER_GNB;
   init_delay_table(fp->ofdm_symbol_size, MAX_DELAY_COMP, NR_MAX_OFDM_SYMBOL_SIZE, fp->delay_table);
@@ -139,17 +139,10 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
   /// Transport init necessary for NR synchro
   init_nr_transport(gNB);
 
-  init_DLSCH_struct(gNB);
+  int ret_loader = load_nrLDPC_coding_interface(NULL, &gNB->nrLDPC_coding_interface, 16 * gNB->max_nb_pusch);
+  AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
-  gNB->nr_srs_info = (nr_srs_info_t **)malloc16_clear(gNB->max_nb_srs * sizeof(nr_srs_info_t*));
-  for (int id = 0; id < gNB->max_nb_srs; id++) {
-    gNB->nr_srs_info[id] = (nr_srs_info_t *)malloc16_clear(sizeof(nr_srs_info_t));
-    gNB->nr_srs_info[id]->srs_generated_signal = malloc16_clear(MAX_NUM_NR_SRS_AP * sizeof(c16_t *));
-    for(int ap=0; ap<MAX_NUM_NR_SRS_AP; ap++) {
-      gNB->nr_srs_info[id]->srs_generated_signal[ap] =
-          malloc16_clear(fp->ofdm_symbol_size * MAX_NUM_NR_SRS_SYMBOLS * sizeof(c16_t));
-    }
-  }
+  init_DLSCH_struct(gNB);
 
   /* Do NOT allocate per-antenna rxdataF: the gNB gets a pointer to the
    * RU to copy/recover freq-domain memory from there */
@@ -174,7 +167,7 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
   common_vars->debugBuff_sample_offset = 0; 
 
   // PRACH
-  init_prach_list(&gNB->prach_list);
+  init_nr_prach(gNB);
 
   int N_RB_UL = cfg->carrier_config.ul_grid_size[cfg->ssb_config.scs_common.value].value;
   int n_buf = Prx*max_ul_mimo_layers;
@@ -206,25 +199,17 @@ void phy_free_nr_gNB(PHY_VARS_gNB *gNB)
 {
   const int Ptx = gNB->gNB_config.carrier_config.num_tx_ant.value;
   const int Prx = gNB->gNB_config.carrier_config.num_rx_ant.value;
-  const int max_ul_mimo_layers = 4; // taken from phy_init_nr_gNB()
+  const int max_ul_mimo_layers = NR_MAX_NB_LAYERS;
   const int n_buf = Prx * max_ul_mimo_layers;
 
   PHY_MEASUREMENTS_gNB *meas = &gNB->measurements;
   free_and_zero(meas->n0_subband_power);
 
-  for (int id = 0; id < gNB->max_nb_srs; id++) {
-    for(int i=0; i<MAX_NUM_NR_SRS_AP; i++) {
-      free_and_zero(gNB->nr_srs_info[id]->srs_generated_signal[i]);
-    }
-    free_and_zero(gNB->nr_srs_info[id]->srs_generated_signal);
-    free_and_zero(gNB->nr_srs_info[id]);
-  }
-  free_and_zero(gNB->nr_srs_info);
-
   free_ul_reference_signal_sequences();
   free_gnb_lowpapr_sequences();
 
   reset_nr_transport(gNB);
+  reset_nr_prach(gNB);
 
   destroy_DLSCH_struct(gNB);
 
@@ -437,18 +422,18 @@ void init_nr_transport(PHY_VARS_gNB *gNB)
   else
     buffer_ul_slots = (nb_ul_slots_period < slot_ahead) ? nb_ul_slots_period : slot_ahead;
 
-  gNB->max_nb_pucch = buffer_ul_slots ? MAX_MOBILES_PER_GNB * buffer_ul_slots : 1;
   gNB->max_nb_pusch = buffer_ul_slots ? MAX_MOBILES_PER_GNB * buffer_ul_slots : 1;
-  gNB->max_nb_srs = buffer_ul_slots ? buffer_ul_slots << 1 : 1; // assuming at most 2 SRS per slot
 
-  gNB->pucch = (NR_gNB_PUCCH_t *)malloc16(gNB->max_nb_pucch * sizeof(NR_gNB_PUCCH_t));
-  for (int i = 0; i < gNB->max_nb_pucch; i++) {
-    memset(&gNB->pucch[i], 0, sizeof(gNB->pucch[i]));
-  }
+  int max_nb_pucch = buffer_ul_slots ? MAX_MOBILES_PER_GNB * buffer_ul_slots : 1;
+  bool ret;
+  ret = spsc_q_alloc(&gNB->pucch_queue, max_nb_pucch, sizeof(NR_gNB_PUCCH_job_t));
+  DevAssert(ret);
+  ret = spsc_q_alloc(&gNB->pusch_queue, gNB->max_nb_pusch, sizeof(NR_gNB_PUSCH_job_t));
+  DevAssert(ret);
 
-  gNB->srs = (NR_gNB_SRS_t *)malloc16(gNB->max_nb_srs * sizeof(NR_gNB_SRS_t));
-  for (int i = 0; i < gNB->max_nb_srs; i++)
-    gNB->srs[i].active = 0;
+  int max_nb_srs = buffer_ul_slots ? buffer_ul_slots << 1 : 1; // assuming at most 2 SRS per slot
+  ret = spsc_q_alloc(&gNB->srs_queue, max_nb_srs, sizeof(NR_gNB_SRS_job_t));
+  DevAssert(ret);
 
   gNB->ulsch = (NR_gNB_ULSCH_t *)malloc16(gNB->max_nb_pusch * sizeof(NR_gNB_ULSCH_t));
   for (int i = 0; i < gNB->max_nb_pusch; i++) {
@@ -465,8 +450,9 @@ void reset_nr_transport(PHY_VARS_gNB *gNB)
 {
   const NR_DL_FRAME_PARMS *fp = &gNB->frame_parms;
 
-  free(gNB->pucch);
-  free(gNB->srs);
+  spsc_q_free(&gNB->pucch_queue);
+  spsc_q_free(&gNB->pusch_queue);
+  spsc_q_free(&gNB->srs_queue);
 
   for (int i = 0; i < gNB->max_nb_pusch; i++)
     free_gNB_ulsch(&gNB->ulsch[i], fp->N_RB_UL);

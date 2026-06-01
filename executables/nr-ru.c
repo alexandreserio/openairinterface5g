@@ -15,14 +15,14 @@
 #include "common/utils/nr/nr_common.h"
 #include "common/utils/assertions.h"
 #include "common/utils/system.h"
+#include "common/utils/fsn.h"
 #include "common/ran_context.h"
 
 #include "radio/COMMON/common_lib.h"
 #include "radio/ETHERNET/ethernet_lib.h"
 
-#include "PHY/LTE_TRANSPORT/if4_tools.h"
+#include "PHY/if4_tools.h"
 
-#include "PHY/types.h"
 #include "PHY/defs_nr_common.h"
 #include "PHY/phy_extern.h"
 #include "PHY/NR_TRANSPORT/nr_transport_proto.h"
@@ -446,11 +446,6 @@ static void rx_rf(RU_t *ru, int *frame, int *slot)
   metadata mt = {.slot = *slot, .frame = *frame};
   gNBscopeCopyWithMetadata(ru, gNbTimeDomainSamples, rxp[0], sizeof(c16_t), 1, samples_per_slot, 0, &mt);
 
-  if (rxs != samples_per_slot) {
-    //exit_fun( "problem receiving samples" );
-    LOG_E(PHY, "problem receiving samples\n");
-  }
-
   stop_meas(&ru->rx_fhaul);
 }
 
@@ -872,7 +867,7 @@ void *ru_thread(void *param)
     }
 
     LOG_I(PHY, "Starting IF interface for RU %d, nb_rx %d\n", ru->idx, ru->nb_rx);
-    AssertFatal(ru->nr_start_if(ru, NULL) == 0, "Could not start the IF device\n");
+    AssertFatal(ru->nr_start_if(ru) == 0, "Could not start the IF device\n");
 
   } else if (ru->if_south == LOCAL_RF) { // configure RF parameters only
     ret = openair0_device_load(&ru->rfdevice,&ru->openair0_cfg);
@@ -989,11 +984,16 @@ void *ru_thread(void *param)
                      proc->tti_rx * gNB->frame_parms.samples_per_slot_wCP);
 
         // Do PRACH RU processing
-        prach_item_t *p =
-            find_nr_prach(&gNB->prach_list, proc->frame_rx, proc->tti_rx, gNB->frame_parms.nb_antennas_rx, SEARCH_EXIST);
-        if (p) {
+        fsn_t now = {.f = proc->frame_rx, .s = proc->tti_rx, .mu = fp->numerology_index};
+        prach_item_t p;
+        while (get_next_nr_prach(&gNB->prach_ru_queue, &now, &p)) {
           // need to extract RACH data for later processing by rx_nr_prach()
-          rx_nr_prach_ru(p, ru->common.rxdata, ru->nr_frame_parms, ru->N_TA_offset);
+          rx_nr_prach_ru(&p, ru->common.rxdata, ru->nr_frame_parms, ru->N_TA_offset);
+          bool success = spsc_q_put(&gNB->prach_l1rx_queue, &p, sizeof(p));
+          // assume prach_l1rx_queue never full: prach_ru_queue filled at
+          // constant pace, but prach_l1rx_queue emptied as fast as possible,
+          // see rx_func()
+          DevAssert(success);
         } // end if (prach_id >= 0)
       } // end if (ru->feprx)
     } // end if (slot_type == NR_UPLINK_SLOT || slot_type == NR_MIXED_SLOT) {
@@ -1019,20 +1019,22 @@ int start_streaming(RU_t *ru) {
   return ru->ifdevice.thirdparty_startstreaming(&ru->ifdevice);
 }
 
-int nr_start_if(struct RU_t_s *ru, struct PHY_VARS_gNB_s *gNB) {
+int nr_start_if(struct RU_t_s *ru)
+{
   if (ru->if_south <= REMOTE_IF5)
     for (int i = 0; i < ru->nb_rx; i++)
       ru->openair0_cfg.rxbase[i] = ru->common.rxdata[i];
   ru->openair0_cfg.rxsize = ru->nr_frame_parms->samples_per_subframe*10;
-  reset_meas(&ru->ifdevice.tx_fhaul);
   return ru->ifdevice.trx_start_func(&ru->ifdevice);
 }
 
-int start_rf(RU_t *ru) {
+int start_rf(RU_t *ru)
+{
   return(ru->rfdevice.trx_start_func(&ru->rfdevice));
 }
 
-int stop_rf(RU_t *ru) {
+int stop_rf(RU_t *ru)
+{
   if (ru->rfdevice.trx_get_stats_func) {
     ru->rfdevice.trx_get_stats_func(&ru->rfdevice);
   }

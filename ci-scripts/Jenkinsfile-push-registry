@@ -56,7 +56,7 @@ pipeline {
               echo "Forced Tag is ${WEEK_TAG}"
             }
           }
-          WEEK_SHA = sh returnStdout: true, script: 'git log -n1 --pretty=format:"%h" origin/develop | cut -c 1-8'
+          WEEK_SHA = sh returnStdout: true, script: 'git log -n1 --pretty=format:"%H" origin/develop'
           WEEK_SHA = WEEK_SHA.trim()
 
           withCredentials([

@@ -32,34 +32,14 @@ from cls_ci_helper import archiveArtifact
 IMAGES = ['oai-enb', 'oai-lte-ru', 'oai-lte-ue', 'oai-gnb', 'oai-nr-cuup', 'oai-gnb-aw2s', 'oai-nr-ue', 'oai-enb-asan', 'oai-gnb-asan', 'oai-lte-ue-asan', 'oai-nr-ue-asan', 'oai-nr-cuup-asan', 'oai-gnb-aerial', 'oai-gnb-fhi72']
 DEFAULT_REGISTRY = "gracehopper3-oai.sboai.cs.eurecom.fr"
 
-def CreateWorkspace(host, sourcePath, ranRepository, ranCommitID, ranTargetBranch, ranAllowMerge):
-	if ranCommitID == '':
-		logging.error('need ranCommitID in CreateWorkspace()')
-		raise ValueError('Insufficient Parameter in CreateWorkspace(): need ranCommitID')
-
+def CreateWorkspace(host, sourcePath, repository, branch):
 	script = "scripts/create_workspace.sh"
-	options = f"{sourcePath} {ranRepository} {ranCommitID}"
-	if ranAllowMerge:
-		if ranTargetBranch == '':
-			ranTargetBranch = 'develop'
-		options += f" {ranTargetBranch}"
+	options = f"{sourcePath} {repository} {branch}"
 	logging.info(f'execute "{script}" with options "{options}" on node {host}')
 	with cls_cmd.getConnection(host) as c:
 		ret = c.exec_script(script, 90, options)
 	logging.debug(f'"{script}" finished with code {ret.returncode}, output:\n{ret.stdout}')
 	return ret.returncode == 0
-
-def CreateTag(ranCommitID, ranBranch, ranAllowMerge):
-	if ranCommitID == 'develop':
-		return 'develop'
-	shortCommit = ranCommitID[0:8]
-	if ranAllowMerge:
-		# Allowing contributor to have a name/branchName format
-		branchName = ranBranch.replace('/','-')
-		tagToUse = f'{branchName}-{shortCommit}'
-	else:
-		tagToUse = f'develop-{shortCommit}'
-	return tagToUse
 
 def AnalyzeBuildLogs(image, lf):
 	committed = False
@@ -172,22 +152,15 @@ class Containerize():
 
 	def __init__(self):
 		
-		self.ranRepository = ''
-		self.ranBranch = ''
-		self.ranAllowMerge = False
-		self.ranCommitID = ''
-		self.ranTargetBranch = ''
-		self.eNBSourceCodePath = ''
+		self.repository = ''
+		self.branch = ''
+		self.merge = False
+		self.targetBranch = ''
+		self.workspace = ''
 		self.imageKind = ''
-		self.proxyCommit = None
 		self.yamlPath = ''
 		self.services = ''
 		self.deploymentTag = ''
-
-		self.cli = ''
-		self.cliBuildOptions = ''
-		self.dockerfileprefix = ''
-		self.host = ''
 
 		self.num_attempts = 1
 
@@ -198,23 +171,12 @@ class Containerize():
 #-----------------------------------------------------------
 
 	def BuildImage(self, ctx, node, HTML):
-		lSourcePath = self.eNBSourceCodePath
+		lSourcePath = self.workspace
 		logging.debug('Building on server: ' + node)
 		cmd = cls_cmd.getConnection(node)
 		log_files = []
 	
-		# Checking the hostname to get adapted on cli and dockerfileprefixes
-		cmd.run('hostnamectl')
-		result = re.search('Ubuntu|Red Hat', cmd.getBefore())
-		self.host = result.group(0)
-		if self.host == 'Ubuntu':
-			self.cli = 'docker'
-			self.dockerfileprefix = '.ubuntu'
-			self.cliBuildOptions = ''
-		elif self.host == 'Red Hat':
-			self.cli = 'sudo podman'
-			self.dockerfileprefix = '.rhel9'
-			self.cliBuildOptions = '--disable-compression'
+		dockerfileprefix = '.ubuntu'
 
 		# we always build the ran-build image with all targets
 		# Creating a tupple with the imageName, the DockerFile prefix pattern, targetName and sanitized option
@@ -232,23 +194,20 @@ class Containerize():
 			imageNames.append(('oai-nr-cuup', 'nr-cuup', 'oai-nr-cuup', ''))
 			imageNames.append(('oai-lte-ue', 'lteUE', 'oai-lte-ue', ''))
 			imageNames.append(('oai-nr-ue', 'nrUE', 'oai-nr-ue', ''))
-			if self.host == 'Red Hat':
-				imageNames.append(('oai-physim', 'phySim', 'oai-physim', ''))
-			if self.host == 'Ubuntu':
-				imageNames.append(('oai-lte-ru', 'lteRU', 'oai-lte-ru', ''))
-				# Building again the 5G images with Address Sanitizer
-				imageNames.append(('ran-build', 'build', 'ran-build-asan', '--build-arg "BUILD_OPTION=--sanitize"'))
-				imageNames.append(('oai-enb', 'eNB', 'oai-enb-asan', '--build-arg "BUILD_OPTION=--sanitize"'))
-				imageNames.append(('oai-gnb', 'gNB', 'oai-gnb-asan', '--build-arg "BUILD_OPTION=--sanitize"'))
-				imageNames.append(('oai-lte-ue', 'lteUE', 'oai-lte-ue-asan', '--build-arg "BUILD_OPTION=--sanitize"'))
-				imageNames.append(('oai-nr-ue', 'nrUE', 'oai-nr-ue-asan', '--build-arg "BUILD_OPTION=--sanitize"'))
-				imageNames.append(('oai-nr-cuup', 'nr-cuup', 'oai-nr-cuup-asan', '--build-arg "BUILD_OPTION=--sanitize"'))
-				imageNames.append(('ran-build-fhi72', 'build.fhi72', 'ran-build-fhi72', ''))
-				imageNames.append(('oai-gnb', 'gNB.fhi72', 'oai-gnb-fhi72', ''))
-				imageNames.append(('oai-nr-oru', 'nrORU.fhi72', 'oai-nr-oru', ''))
+			imageNames.append(('oai-lte-ru', 'lteRU', 'oai-lte-ru', ''))
+			# Building again the 5G images with Address Sanitizer
+			imageNames.append(('ran-build', 'build', 'ran-build-asan', '--build-arg "BUILD_OPTION=--sanitize"'))
+			imageNames.append(('oai-enb', 'eNB', 'oai-enb-asan', '--build-arg "BUILD_OPTION=--sanitize"'))
+			imageNames.append(('oai-gnb', 'gNB', 'oai-gnb-asan', '--build-arg "BUILD_OPTION=--sanitize"'))
+			imageNames.append(('oai-lte-ue', 'lteUE', 'oai-lte-ue-asan', '--build-arg "BUILD_OPTION=--sanitize"'))
+			imageNames.append(('oai-nr-ue', 'nrUE', 'oai-nr-ue-asan', '--build-arg "BUILD_OPTION=--sanitize"'))
+			imageNames.append(('oai-nr-cuup', 'nr-cuup', 'oai-nr-cuup-asan', '--build-arg "BUILD_OPTION=--sanitize"'))
+			imageNames.append(('ran-build-fhi72', 'build.fhi72', 'ran-build-fhi72', ''))
+			imageNames.append(('oai-gnb', 'gNB.fhi72', 'oai-gnb-fhi72', ''))
+			imageNames.append(('oai-nr-oru', 'nrORU.fhi72', 'oai-nr-oru', ''))
 		result = re.search('build_cross_arm64', self.imageKind)
 		if result is not None:
-			self.dockerfileprefix = '.ubuntu.cross-arm64'
+			dockerfileprefix = '.ubuntu.cross-arm64'
 		result = re.search('native_armv9', self.imageKind)
 		if result is not None:
 			imageNames.append(('oai-gnb', 'gNB', 'oai-gnb', ''))
@@ -263,25 +222,21 @@ class Containerize():
 			imageNames.append(('oai-nr-ue', 'nrUE', 'oai-nr-ue', ''))
 		
 		cmd.cd(lSourcePath)
-		# if asterix, copy the entitlement and subscription manager configurations
-		if self.host == 'Red Hat':
-			cmd.run('mkdir -p ./etc-pki-entitlement')
-			cmd.run('cp /etc/pki/entitlement/*.pem ./etc-pki-entitlement/')
 
 		baseImage = 'ran-base'
 		baseTag = 'develop'
 		forceBaseImageBuild = False
 		imageTag = 'develop'
-		if (self.ranAllowMerge):
+		if (self.merge):
 			imageTag = 'ci-temp'
-			if self.ranTargetBranch == 'develop':
-				cmd.run(f'git diff HEAD..origin/develop -- cmake_targets/build_oai cmake_targets/tools/build_helper docker/Dockerfile.base{self.dockerfileprefix} | grep --colour=never -i INDEX')
+			if self.targetBranch == 'develop':
+				cmd.run(f'git diff HEAD..origin/develop -- cmake_targets/build_oai cmake_targets/tools/build_helper docker/Dockerfile.base{dockerfileprefix} | grep --colour=never -i INDEX')
 				result = re.search('index', cmd.getBefore())
 				if result is not None:
 					forceBaseImageBuild = True
 					baseTag = 'ci-temp'
 			# if the branch name contains integration_20xx_wyy, let rebuild ran-base
-			result = re.search('integration_20([0-9]{2})_w([0-9]{2})', self.ranBranch)
+			result = re.search('integration_20([0-9]{2})_w([0-9]{2})', self.branch)
 			if not forceBaseImageBuild and result is not None:
 				forceBaseImageBuild = True
 				baseTag = 'ci-temp'
@@ -289,31 +244,30 @@ class Containerize():
 			forceBaseImageBuild = True
 
 		# Let's remove any previous run artifacts if still there
-		cmd.run(f"{self.cli} image prune --force")
+		cmd.run(f"docker image prune --force")
 		for image,pattern,name,option in imageNames:
-			cmd.run(f"{self.cli} image rm {name}:{imageTag}", reportNonZero=False)
+			cmd.run(f"docker image rm {name}:{imageTag}", reportNonZero=False)
 
 		cmd.run(f'docker login -u oaicicd -p oaicicd {DEFAULT_REGISTRY}')
 		ubuntuImage = "ubuntu:noble"
 		# Build the base image only on Push Events (not on Merge Requests)
 		# On when the base image docker file is being modified.
 		if forceBaseImageBuild:
-			cmd.run(f"{self.cli} image rm {baseImage}:{baseTag}")
+			cmd.run(f"docker image rm {baseImage}:{baseTag}")
 			logfile = f'{lSourcePath}/cmake_targets/log/ran-base.docker.log'
-			if self.host == 'Ubuntu':
-				option = f" --build-arg UBUNTU_IMAGE={DEFAULT_REGISTRY}/{ubuntuImage}"
-			cmd.run(f"{self.cli} build {self.cliBuildOptions} --target {baseImage} --tag {baseImage}:{baseTag} --file docker/Dockerfile.base{self.dockerfileprefix} {option} . &> {logfile}", timeout=1600)
+			option = f" --build-arg UBUNTU_IMAGE={DEFAULT_REGISTRY}/{ubuntuImage}"
+			cmd.run(f"docker build --target {baseImage} --tag {baseImage}:{baseTag} --file docker/Dockerfile.base{dockerfileprefix} {option} . &> {logfile}", timeout=1600)
 			t = ("ran-base", archiveArtifact(cmd, ctx, logfile))
 			log_files.append(t)
 
 		# First verify if the base image was properly created.
-		ret = cmd.run(f"{self.cli} image inspect --format=\'Size = {{{{.Size}}}} bytes\' {baseImage}:{baseTag}")
+		ret = cmd.run(f"docker image inspect --format=\'Size = {{{{.Size}}}} bytes\' {baseImage}:{baseTag}")
 		allImagesSize = {}
 		if ret.returncode != 0:
 			logging.error('\u001B[1m Could not build properly ran-base\u001B[0m')
 			# Recover the name of the failed container?
-			cmd.run(f"{self.cli} ps --quiet --filter \"status=exited\" -n1 | xargs --no-run-if-empty {self.cli} rm -f")
-			cmd.run(f"{self.cli} image prune --force")
+			cmd.run(f"docker ps --quiet --filter \"status=exited\" -n1 | xargs --no-run-if-empty docker rm -f")
+			cmd.run(f"docker image prune --force")
 			cmd.close()
 			logging.error('\u001B[1m Building OAI Images Failed\u001B[0m')
 			HTML.CreateHtmlTestRow(self.imageKind, 'KO', CONST.ALL_PROCESSES_OK)
@@ -333,32 +287,31 @@ class Containerize():
 		for image,pattern,name,option in imageNames:
 			# the archived Dockerfiles have "ran-base:latest" as base image
 			# we need to update them with proper tag
-			cmd.run(f'git checkout -- docker/Dockerfile.{pattern}{self.dockerfileprefix}')
-			cmd.run(f'sed -i -e "s#{baseImage}:latest#{baseImage}:{baseTag}#" docker/Dockerfile.{pattern}{self.dockerfileprefix}')
+			cmd.run(f'git checkout -- docker/Dockerfile.{pattern}{dockerfileprefix}')
+			cmd.run(f'sed -i -e "s#{baseImage}:latest#{baseImage}:{baseTag}#" docker/Dockerfile.{pattern}{dockerfileprefix}')
 			# target images should use the proper ran-build image
 			if image != 'ran-build' and "-asan" in name:
-				cmd.run(f'sed -i -e "s#ran-build:latest#ran-build-asan:{imageTag}#" docker/Dockerfile.{pattern}{self.dockerfileprefix}')
+				cmd.run(f'sed -i -e "s#ran-build:latest#ran-build-asan:{imageTag}#" docker/Dockerfile.{pattern}{dockerfileprefix}')
 			elif "fhi72" in name or name == "oai-nr-oru":
-				cmd.run(f'sed -i -e "s#ran-build-fhi72:latest#ran-build-fhi72:{imageTag}#" docker/Dockerfile.{pattern}{self.dockerfileprefix}')
+				cmd.run(f'sed -i -e "s#ran-build-fhi72:latest#ran-build-fhi72:{imageTag}#" docker/Dockerfile.{pattern}{dockerfileprefix}')
 			elif image != 'ran-build':
-				cmd.run(f'sed -i -e "s#ran-build:latest#ran-build:{imageTag}#" docker/Dockerfile.{pattern}{self.dockerfileprefix}')
+				cmd.run(f'sed -i -e "s#ran-build:latest#ran-build:{imageTag}#" docker/Dockerfile.{pattern}{dockerfileprefix}')
 			if image == 'oai-gnb-aerial':
 				cmd.run('cp -f /opt/nvidia-ipc/nvipc_src.2026.01.07.tar.gz .')
 			logfile = f'{lSourcePath}/cmake_targets/log/{name}.docker.log'
-			if self.host == 'Ubuntu':
-				option = option + f" --build-arg UBUNTU_IMAGE={DEFAULT_REGISTRY}/{ubuntuImage}"
-			ret = cmd.run(f'{self.cli} build {self.cliBuildOptions} --target {image} --tag {name}:{imageTag} --file docker/Dockerfile.{pattern}{self.dockerfileprefix} {option} . > {logfile} 2>&1', timeout=1200)
+			option = option + f" --build-arg UBUNTU_IMAGE={DEFAULT_REGISTRY}/{ubuntuImage}"
+			ret = cmd.run(f'docker build --target {image} --tag {name}:{imageTag} --file docker/Dockerfile.{pattern}{dockerfileprefix} {option} . > {logfile} 2>&1', timeout=1200)
 			t = (name, archiveArtifact(cmd, ctx, logfile))
 			log_files.append(t)
 			if image == 'oai-gnb-aerial':
 				cmd.run('rm -f nvipc_src.2026.01.07.tar.gz')
 			# check the status of the build
-			ret = cmd.run(f"{self.cli} image inspect --format=\'Size = {{{{.Size}}}} bytes\' {name}:{imageTag}")
+			ret = cmd.run(f"docker image inspect --format=\'Size = {{{{.Size}}}} bytes\' {name}:{imageTag}")
 			if ret.returncode != 0:
 				logging.error('\u001B[1m Could not build properly ' + name + '\u001B[0m')
 				status = False
 				# Here we should check if the last container corresponds to a failed command and destroy it
-				cmd.run(f"{self.cli} ps --quiet --filter \"status=exited\" -n1 | xargs --no-run-if-empty {self.cli} rm -f")
+				cmd.run(f"docker ps --quiet --filter \"status=exited\" -n1 | xargs --no-run-if-empty docker rm -f")
 				allImagesSize[name] = 'N/A -- Build Failed'
 				break
 			else:
@@ -372,16 +325,16 @@ class Containerize():
 					logging.debug(f'{name} size is unknown')
 					allImagesSize[name] = 'unknown'
 			# Now pruning dangling images in between target builds
-			cmd.run(f"{self.cli} image prune --force")
+			cmd.run(f"docker image prune --force")
 		cmd.run(f'docker logout {DEFAULT_REGISTRY}')
 		# Remove all intermediate build images and clean up
-		cmd.run(f"{self.cli} image rm ran-build:{imageTag} ran-build-asan:{imageTag} ran-build-fhi72:{imageTag} || true")
-		cmd.run(f"{self.cli} volume prune --force")
+		cmd.run(f"docker image rm ran-build:{imageTag} ran-build-asan:{imageTag} ran-build-fhi72:{imageTag} || true")
+		cmd.run(f"docker volume prune --force")
 
 		# Remove some cached artifacts to prevent out of diskspace problem
 		logging.debug(cmd.run("df -h").stdout)
 		logging.debug(cmd.run("docker system df").stdout)
-		cmd.run(f"{self.cli} buildx prune --filter until=1h --force")
+		cmd.run(f"docker buildx prune --filter until=1h --force")
 		logging.debug(cmd.run("df -h").stdout)
 		logging.debug(cmd.run("docker system df").stdout)
 
@@ -401,108 +354,18 @@ class Containerize():
 			logging.error('\u001B[1m Building OAI Images Failed\u001B[0m')
 		return status
 
-	def BuildProxy(self, ctx, node, HTML):
-		lSourcePath = self.eNBSourceCodePath
+	def BuildRunTests(self, ctx, node, dockerfile, runtime_opt, ctest_opt, HTML):
+		lSourcePath = self.workspace
 		logging.debug('Building on server: ' + node)
-		ssh = cls_cmd.getConnection(node)
-
-		oldRanCommidID = self.ranCommitID
-		oldRanRepository = self.ranRepository
-		oldRanAllowMerge = self.ranAllowMerge
-		oldRanTargetBranch = self.ranTargetBranch
-		self.ranCommitID = self.proxyCommit
-		self.ranRepository = 'https://github.com/EpiSci/oai-lte-5g-multi-ue-proxy.git'
-		self.ranAllowMerge = False
-		self.ranTargetBranch = 'master'
-
-		# Let's remove any previous run artifacts if still there
-		ssh.run('docker image prune --force')
-		# Remove any previous proxy image
-		ssh.run('docker image rm oai-lte-multi-ue-proxy:latest')
-
-		tag = self.proxyCommit
-		logging.debug('building L2sim proxy image for tag ' + tag)
-		# check if the corresponding proxy image with tag exists. If not, build it
-		ret = ssh.run(f'docker image inspect --format=\'Size = {{{{.Size}}}} bytes\' proxy:{tag}')
-		buildProxy = ret.returncode != 0 # if no image, build new proxy
-		if buildProxy:
-			ssh.run(f'rm -Rf {lSourcePath}')
-			success = CreateWorkspace(node, lSourcePath, self.ranRepository, self.ranCommitID, self.ranTargetBranch, self.ranAllowMerge)
-			if not success:
-				raise Exception("could not clone proxy repository")
-
-			fullpath = f'{lSourcePath}/proxy_build.log'
-
-			ssh.run(f'docker build --target oai-lte-multi-ue-proxy --tag proxy:{tag} --file {lSourcePath}/docker/Dockerfile.ubuntu18.04 {lSourcePath} > {fullpath} 2>&1')
-			archiveArtifact(ssh, ctx, fullpath)
-
-			ssh.run('docker image prune --force')
-			ret = ssh.run(f'docker image inspect --format=\'Size = {{{{.Size}}}} bytes\' proxy:{tag}')
-			if ret.returncode != 0:
-				logging.error('\u001B[1m Build of L2sim proxy failed\u001B[0m')
-				ssh.close()
-				HTML.CreateHtmlTestRow('commit ' + tag, 'KO', CONST.ALL_PROCESSES_OK)
-				return False
-		else:
-			logging.debug('L2sim proxy image for tag ' + tag + ' already exists, skipping build')
-
-		# retag the build images to that we pick it up later
-		ssh.run(f'docker image tag proxy:{tag} oai-lte-multi-ue-proxy:latest')
-
-		# we assume that the host on which this is built will also run the proxy. The proxy
-		# currently requires the following command, and the docker-compose up mechanism of
-		# the CI does not allow to run arbitrary commands. Note that the following actually
-		# belongs to the deployment, not the build of the proxy...
-		logging.warning('the following command belongs to deployment, but no mechanism exists to exec it there!')
-		ssh.run('sudo ifconfig lo: 127.0.0.2 netmask 255.0.0.0 up')
-
-		# to prevent accidentally overwriting data that might be used later
-		self.ranCommitID = oldRanCommidID
-		self.ranRepository = oldRanRepository
-		self.ranAllowMerge = oldRanAllowMerge
-		self.ranTargetBranch = oldRanTargetBranch
-
-		ret = ssh.run(f'docker image inspect --format=\'Size = {{{{.Size}}}} bytes\' proxy:{tag}')
-		result = re.search(r'Size *= *(?P<size>[0-9\-]+) *bytes', ret.stdout)
-		# Cleaning any created tmp volume
-		ssh.run('docker volume prune --force')
-		ssh.close()
-
-		allImagesSize = {}
-		if result is not None:
-			imageSize = float(result.group('size')) / 1000000
-			logging.debug('\u001B[1m   proxy size is ' + ('%.0f' % imageSize) + ' Mbytes\u001B[0m')
-			allImagesSize['proxy'] = str(round(imageSize,1)) + ' Mbytes'
-			logging.info('\u001B[1m Building L2sim Proxy Image Pass\u001B[0m')
-			HTML.CreateHtmlTestRow('commit ' + tag, 'OK', CONST.ALL_PROCESSES_OK)
-			return True
-		else:
-			logging.error('proxy size is unknown')
-			allImagesSize['proxy'] = 'unknown'
-			logging.error('\u001B[1m Build of L2sim proxy failed\u001B[0m')
-			HTML.CreateHtmlTestRow('commit ' + tag, 'KO', CONST.ALL_PROCESSES_OK)
-			return False
-
-	def BuildRunTests(self, ctx, node, HTML):
-		lSourcePath = self.eNBSourceCodePath
-		logging.debug('Building on server: ' + node)
-		cmd = cls_cmd.RemoteCmd(node)
+		cmd = cls_cmd.getConnection(node)
 		cmd.cd(lSourcePath)
-
-		ret = cmd.run('hostnamectl')
-		result = re.search('Ubuntu', ret.stdout)
-		host = result.group(0)
-		if host != 'Ubuntu':
-			cmd.close()
-			raise Exception("Can build unit tests only on Ubuntu server")
-		logging.debug('running on Ubuntu as expected')
 
 		# check that ran-base image exists as we expect it
 		baseImage = 'ran-base'
 		baseTag = 'develop'
-		if self.ranAllowMerge:
-			if self.ranTargetBranch == 'develop':
-				cmd.run(f'git diff HEAD..origin/develop -- cmake_targets/build_oai cmake_targets/tools/build_helper docker/Dockerfile.base{self.dockerfileprefix} | grep --colour=never -i INDEX')
+		if self.merge:
+			if self.targetBranch == 'develop':
+				cmd.run(f'git diff HEAD..origin/develop -- cmake_targets/build_oai cmake_targets/tools/build_helper docker/Dockerfile.base.ubuntu | grep --colour=never -i INDEX')
 				result = re.search('index', cmd.getBefore())
 				if result is not None:
 					baseTag = 'ci-temp'
@@ -513,9 +376,9 @@ class Containerize():
 			return False
 
 		# build ran-unittests image
-		dockerfile = "ci-scripts/docker/Dockerfile.unittest.ubuntu"
 		logfile = f'{lSourcePath}/cmake_targets/log/unittest-build.log'
-		ret = cmd.run(f'docker build --progress=plain --tag ran-unittests:{baseTag} --file {dockerfile} . &> {logfile}')
+		ret = cmd.run(f'docker build --progress=plain --tag ran-unittests:{baseTag} --file ci-scripts/{dockerfile} . &> {logfile}')
+
 		archiveArtifact(cmd, ctx, logfile)
 		if ret.returncode != 0:
 			logging.error(f'Cannot build unit tests')
@@ -528,7 +391,7 @@ class Containerize():
 		# I would like to run it with --rm and mount the ctest result directory to avoid 'docker cp'
 		# below, but then permissions are messed up and we can't remove the directory without sudo
 		# making the next pipeline fail
-		ret = cmd.run(f'docker run -a STDOUT --workdir /oai-ran/build/ --env LD_LIBRARY_PATH=/oai-ran/build/ --name ran-unittests ran-unittests:{baseTag} ctest --no-label-summary -j$(nproc)')
+		ret = cmd.run(f'docker run -a STDOUT {runtime_opt} --workdir /oai-ran/build/ --env LD_LIBRARY_PATH=/oai-ran/build/ --name ran-unittests ran-unittests:{baseTag} ctest --no-label-summary -j$(nproc) {ctest_opt}')
 		cmd.run('docker cp ran-unittests:/oai-ran/build/Testing/Temporary/LastTest.log .')
 		archiveArtifact(cmd, ctx, f'{lSourcePath}/LastTest.log')
 		cmd.run('docker cp ran-unittests:/oai-ran/build/Testing/Temporary/LastTestsFailed.log .')
@@ -544,7 +407,7 @@ class Containerize():
 			return False
 
 	def Push_Image_to_Local_Registry(self, node, HTML, tag_prefix=""):
-		lSourcePath = self.eNBSourceCodePath
+		lSourcePath = self.workspace
 		logging.debug('Pushing images to server: ' + node)
 		ssh = cls_cmd.getConnection(node)
 		imagePrefix = DEFAULT_REGISTRY
@@ -557,10 +420,10 @@ class Containerize():
 			return False
 
 		orgTag = 'develop'
-		if self.ranAllowMerge:
+		if self.merge:
 			orgTag = 'ci-temp'
 		for image in IMAGES:
-			tagToUse = tag_prefix + CreateTag(self.ranCommitID, self.ranBranch, self.ranAllowMerge)
+			tagToUse = tag_prefix + self.branch
 			imageTag = f"{image}:{tagToUse}"
 			ret = ssh.run(f'docker image tag {image}:{orgTag} {imagePrefix}/{imageTag}')
 			if ret.returncode != 0:
@@ -573,7 +436,7 @@ class Containerize():
 				HTML.CreateHtmlTestRow(msg, 'KO', CONST.ALL_PROCESSES_OK)
 				return False
 			# Creating a develop tag on the local private registry
-			if not self.ranAllowMerge:
+			if not self.merge:
 				devTag = f"{tag_prefix}develop"
 				ssh.run(f'docker image tag {image}:{orgTag} {imagePrefix}/{image}:{devTag}')
 				ssh.run(f'docker push {imagePrefix}/{image}:{devTag}')
@@ -621,7 +484,7 @@ class Containerize():
 	def Pull_Image_from_Registry(self, HTML, node, images, tag=None, tag_prefix="", registry=DEFAULT_REGISTRY, username="oaicicd", password="oaicicd"):
 		logging.debug(f'\u001B[1m Pulling image(s) on server: {node}\u001B[0m')
 		if not tag:
-			tag = CreateTag(self.ranCommitID, self.ranBranch, self.ranAllowMerge)
+			tag = self.branch
 		with cls_cmd.getConnection(node) as cmd:
 			success, msg = Containerize.Pull_Image(cmd, images, tag, tag_prefix, registry, username, password)
 		param = f"on node {node}"
@@ -634,7 +497,7 @@ class Containerize():
 	def Clean_Test_Server_Images(self, HTML, node, images, tag=None):
 		logging.debug(f'\u001B[1m Cleaning image(s) from server: {node}\u001B[0m')
 		if not tag:
-			tag = CreateTag(self.ranCommitID, self.ranBranch, self.ranAllowMerge)
+			tag = self.branch
 
 		status = True
 		with cls_cmd.getConnection(node) as myCmd:
@@ -653,17 +516,17 @@ class Containerize():
 		return status
 
 	def Create_Workspace(self, node, HTML):
-		lSourcePath = self.eNBSourceCodePath
-		success = CreateWorkspace(node, lSourcePath, self.ranRepository, self.ranCommitID, self.ranTargetBranch, self.ranAllowMerge)
+		sourcePath = self.workspace
+		success = CreateWorkspace(node, sourcePath, self.repository, self.branch)
 		if success:
-			HTML.CreateHtmlTestRowQueue('N/A', 'OK', [f"created workspace {lSourcePath}"])
+			HTML.CreateHtmlTestRowQueue('N/A', 'OK', [f"created workspace {sourcePath} on node {node}"])
 		else:
 			HTML.CreateHtmlTestRowQueue('N/A', 'KO', ["cannot create workspace"])
 		return success
 
 	def DeployObject(self, ctx, node, HTML):
 		num_attempts = self.num_attempts
-		lSourcePath = self.eNBSourceCodePath
+		lSourcePath = self.workspace
 		yaml = self.yamlPath.strip('/')
 		wd = f'{lSourcePath}/{yaml}'
 		wd_yaml = f'{wd}/docker-compose.y*ml'
@@ -681,7 +544,7 @@ class Containerize():
 				raise ValueError(f'Invalid value for num_attempts: {num_attempts}, must be greater than 0')
 			for attempt in range(num_attempts):
 				logging.info(f'will start services {services}')
-				status = ssh.run(f'docker compose -f {wd_yaml} up -d --wait --wait-timeout 60 -- {services}')
+				status = ssh.run(f'docker compose -f {wd_yaml} up -d --wait --wait-timeout 120 -- {services}')
 				info = ssh.run(f"docker compose -f {wd_yaml} ps --all --format=\'table {{{{.Service}}}} [{{{{.Image}}}}] {{{{.Status}}}}\' -- {services} | column -t")
 				deployed = status.returncode == 0
 				if not deployed:
@@ -707,7 +570,7 @@ class Containerize():
 		return deployed
 
 	def StopObject(self, ctx, node, HTML):
-		lSourcePath = self.eNBSourceCodePath
+		lSourcePath = self.workspace
 		if not self.services:
 			raise ValueError(f'no services provided')
 		logging.info(f'\u001B[1m Stopping objects "{self.services}" from server: {node}\u001B[0m')
@@ -736,7 +599,7 @@ class Containerize():
 		return success
 
 	def UndeployObject(self, ctx, node, HTML, to_analyze):
-		lSourcePath = self.eNBSourceCodePath
+		lSourcePath = self.workspace
 		logging.info(f'\u001B[1m Undeploying all objects from server {node}\u001B[0m')
 		yaml = self.yamlPath.strip('/')
 		wd = f'{lSourcePath}/{yaml}'
@@ -774,7 +637,7 @@ class Containerize():
 	def AnalyzeRTStatsObject(self, HTML, node, ctx, thresholds, service=None):
 		logging.info(f'Analyzing realtime stats from server: {node}')
 		yaml = self.yamlPath.strip('/')
-		wd = f'{self.eNBSourceCodePath}/{yaml}'
+		wd = f'{self.workspace}/{yaml}'
 		wd_yaml = f'{wd}/docker-compose.y*ml'
 
 		with cls_cmd.getConnection(node) as cmd:

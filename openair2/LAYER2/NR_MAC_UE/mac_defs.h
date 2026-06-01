@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "common/platform_types.h"
+#include "common/utils/threadPool/notified_fifo.h"
 
 /* IF */
 #include "NR_IF_Module.h"
@@ -292,12 +293,13 @@ typedef struct {
   int n_CCE;
   int N_CCE;
   int initial_pucch_id;
+  int pucch_ResourceCommon;
 } PUCCH_sched_t;
 
 typedef struct {
   int sched_frame;
   int sched_slot;
-  PUCCH_sched_t pucch_sched;
+  fapi_nr_ul_config_pucch_pdu pucch_pdu;
 } RA_PUCCH_SCHED_t;
 
 typedef struct {
@@ -405,7 +407,7 @@ typedef struct {
 typedef struct {
   /// SSB RSRP in dBm
   int ssb_rsrp_dBm;
-  float_t ssb_sinr_dB;
+  float ssb_sinr_dB;
 } NR_SSB_meas_t;
 
 typedef struct {
@@ -593,7 +595,7 @@ typedef struct NR_UE_MAC_INST_s {
 
   // Defined for abstracted mode
   nr_downlink_indication_t dl_info;
-  NR_UE_DL_HARQ_STATUS_t dl_harq_info[NR_MAX_HARQ_PROCESSES];
+  NR_UE_DL_HARQ_STATUS_t dl_harq_info[NR_MAX_HARQ_PROCESSES][2]; // one harq process for each codeword
   NR_UE_UL_HARQ_INFO_t ul_harq_info[NR_MAX_HARQ_PROCESSES];
 
   NR_TAG_Id_t tag_Id;

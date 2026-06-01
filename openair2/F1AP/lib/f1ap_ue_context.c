@@ -287,6 +287,7 @@ static bool eq_srb_to_setup(const f1ap_srb_to_setup_t *a, const f1ap_srb_to_setu
 static void free_srb_to_setup(f1ap_srb_to_setup_t *srbs)
 {
   // nothing to free
+  UNUSED(srbs);
 }
 
 static F1AP_SRBs_Setup_List_t encode_srbs_setup(int n, const f1ap_srb_setup_t *srbs)
@@ -375,6 +376,7 @@ static bool eq_srb_setup(const f1ap_srb_setup_t *a, const f1ap_srb_setup_t *b)
 static void free_srb_setup(f1ap_srb_setup_t *srbs)
 {
   // nothing to free
+  UNUSED(srbs);
 }
 
 static F1AP_QoSFlowLevelQoSParameters_t encode_qos_flow_param(const f1ap_qos_flow_param_t *p)
@@ -384,6 +386,7 @@ static F1AP_QoSFlowLevelQoSParameters_t encode_qos_flow_param(const f1ap_qos_flo
   if (p->qos_type == NON_DYNAMIC) {
     f1ap.qoS_Characteristics.present = F1AP_QoS_Characteristics_PR_non_Dynamic_5QI;
     asn1cCalloc(f1ap.qoS_Characteristics.choice.non_Dynamic_5QI, nd);
+    DevAssert(p->nondyn.fiveQI >= MIN_FIVEQI && p->nondyn.fiveQI <= MAX_FIVEQI);
     nd->fiveQI = p->nondyn.fiveQI;
   } else {
     DevAssert(p->qos_type == DYNAMIC);
@@ -410,6 +413,19 @@ static F1AP_QoSFlowLevelQoSParameters_t encode_qos_flow_param(const f1ap_qos_flo
   arp->priorityLevel = p->arp.prio;
   arp->pre_emptionCapability = p->arp.preempt_cap;
   arp->pre_emptionVulnerability = p->arp.preempt_vuln;
+
+  // GBR QoS Flow Information (optional)
+  if (p->gbr_qos_flow_information != NULL) {
+    const gbr_qos_flow_information_t *gbr = p->gbr_qos_flow_information;
+    asn1cCalloc(f1ap.gBR_QoS_Flow_Information, gbr_ie);
+
+    // Bit rates: uint64_t -> ASN.1 INTEGER_t
+    asn_ulong2INTEGER(&gbr_ie->maxFlowBitRateDownlink, gbr->dl.maximumFlowBitRate);
+    asn_ulong2INTEGER(&gbr_ie->maxFlowBitRateUplink, gbr->ul.maximumFlowBitRate);
+    asn_ulong2INTEGER(&gbr_ie->guaranteedFlowBitRateDownlink, gbr->dl.guaranteedFlowBitRate);
+    asn_ulong2INTEGER(&gbr_ie->guaranteedFlowBitRateUplink, gbr->ul.guaranteedFlowBitRate);
+  }
+
   return f1ap;
 }
 
@@ -441,10 +457,23 @@ static bool decode_qos_flow_param(const F1AP_QoSFlowLevelQoSParameters_t *f1ap, 
   out->arp.prio = arp->priorityLevel;
   out->arp.preempt_cap = arp->pre_emptionCapability;
   out->arp.preempt_vuln = arp->pre_emptionVulnerability;
+
+  // Decode GBR QoS Flow Information (optional)
+  if (f1ap->gBR_QoS_Flow_Information != NULL) {
+    const F1AP_GBR_QoSFlowInformation_t *gbr_ie = f1ap->gBR_QoS_Flow_Information;
+    out->gbr_qos_flow_information = calloc_or_fail(1, sizeof(gbr_qos_flow_information_t));
+
+    // Bit rates: ASN.1 INTEGER_t -> uint64_t
+    asn_INTEGER2ulong(&gbr_ie->maxFlowBitRateDownlink, &out->gbr_qos_flow_information->dl.maximumFlowBitRate);
+    asn_INTEGER2ulong(&gbr_ie->maxFlowBitRateUplink, &out->gbr_qos_flow_information->ul.maximumFlowBitRate);
+    asn_INTEGER2ulong(&gbr_ie->guaranteedFlowBitRateDownlink, &out->gbr_qos_flow_information->dl.guaranteedFlowBitRate);
+    asn_INTEGER2ulong(&gbr_ie->guaranteedFlowBitRateUplink, &out->gbr_qos_flow_information->ul.guaranteedFlowBitRate);
+  }
+
   return true;
 }
 
-static f1ap_qos_flow_param_t cp_qos_flow_param(const f1ap_qos_flow_param_t *orig)
+f1ap_qos_flow_param_t cp_qos_flow_param(const f1ap_qos_flow_param_t *orig)
 {
   f1ap_qos_flow_param_t cp = {
     .qos_type = orig->qos_type,
@@ -465,6 +494,11 @@ static f1ap_qos_flow_param_t cp_qos_flow_param(const f1ap_qos_flow_param_t *orig
       _F1_MALLOC(cpdyn->delay_critical, *odyn->delay_critical);
     if (odyn->avg_win)
       _F1_MALLOC(cpdyn->avg_win, *odyn->avg_win);
+  }
+  // Copy GBR information
+  if (orig->gbr_qos_flow_information != NULL) {
+    cp.gbr_qos_flow_information = calloc_or_fail(1, sizeof(*cp.gbr_qos_flow_information));
+    *cp.gbr_qos_flow_information = *orig->gbr_qos_flow_information;
   }
   return cp;
 }
@@ -488,6 +522,14 @@ static bool eq_qos_flow_param(const f1ap_qos_flow_param_t *a, const f1ap_qos_flo
   _EQ_CHECK_INT(a->arp.prio, b->arp.prio);
   _EQ_CHECK_INT(a->arp.preempt_cap, b->arp.preempt_cap);
   _EQ_CHECK_INT(a->arp.preempt_vuln, b->arp.preempt_vuln);
+  if (a->gbr_qos_flow_information != NULL && b->gbr_qos_flow_information != NULL) {
+    const gbr_qos_flow_information_t *agbr = a->gbr_qos_flow_information;
+    const gbr_qos_flow_information_t *bgbr = b->gbr_qos_flow_information;
+    _EQ_CHECK_LONG(agbr->dl.guaranteedFlowBitRate, bgbr->dl.guaranteedFlowBitRate);
+    _EQ_CHECK_LONG(agbr->dl.maximumFlowBitRate, bgbr->dl.maximumFlowBitRate);
+    _EQ_CHECK_LONG(agbr->ul.guaranteedFlowBitRate, bgbr->ul.guaranteedFlowBitRate);
+    _EQ_CHECK_LONG(agbr->ul.maximumFlowBitRate, bgbr->ul.maximumFlowBitRate);
+  }
   return true;
 }
 
@@ -500,6 +542,7 @@ static void free_qos_flow_param(f1ap_qos_flow_param_t *p)
     free(p->dyn.delay_critical);
     free(p->dyn.avg_win);
   }
+  free(p->gbr_qos_flow_information);
   // arp: nothing to free
 }
 
@@ -639,6 +682,7 @@ static bool eq_up_tnl(const f1ap_up_tnl_t *a, const f1ap_up_tnl_t *b)
 static void free_up_tnl(const f1ap_up_tnl_t *tnl)
 {
   // nothing to free
+  UNUSED(tnl);
 }
 
 /* Encode a DRBs_ToSetup list for UE Context Setup Request, from f1ap_drb_to_setup_t. */
@@ -1115,6 +1159,7 @@ static bool eq_drb_to_release(const f1ap_drb_to_release_t *a, const f1ap_drb_to_
 static void free_drb_to_release(f1ap_drb_to_release_t *drb)
 {
   // nothing to free
+  UNUSED(drb);
 }
 
 /**
@@ -2224,6 +2269,7 @@ bool eq_ue_context_rel_req(const f1ap_ue_context_rel_req_t *a, const f1ap_ue_con
 void free_ue_context_rel_req(f1ap_ue_context_rel_req_t *req)
 {
   // nothing to free
+  UNUSED(req);
 }
 
 /*
@@ -2491,4 +2537,5 @@ bool eq_ue_context_rel_cplt(const f1ap_ue_context_rel_cplt_t *a, const f1ap_ue_c
 void free_ue_context_rel_cplt(f1ap_ue_context_rel_cplt_t *cplt)
 {
   // nothing to free
+  UNUSED(cplt);
 }

@@ -15,7 +15,7 @@ static NR_UE_MAC_INST_t *nr_ue_mac_inst[MAX_NUM_NR_UE_INST] = {0};
 void send_srb0_rrc(int ue_id, const uint8_t *sdu, sdu_size_t sdu_len, void *data)
 {
   AssertFatal(sdu_len > 0 && sdu_len < CCCH_SDU_SIZE, "invalid CCCH SDU size %d\n", sdu_len);
-
+  UNUSED(data);
   MessageDef *message_p = itti_alloc_new_message(TASK_MAC_UE, 0, NR_RRC_MAC_CCCH_DATA_IND);
   memset(NR_RRC_MAC_CCCH_DATA_IND(message_p).sdu, 0, sdu_len);
   memcpy(NR_RRC_MAC_CCCH_DATA_IND(message_p).sdu, sdu, sdu_len);
@@ -200,12 +200,14 @@ void reset_mac_inst(NR_UE_MAC_INST_t *nr_mac)
   nr_mac->scheduling_info.phr_info.phr_reporting = 0;
   nr_mac->scheduling_info.phr_info.was_mac_reset = true;
 
-  // flush the soft buffers for all DL HARQ processes
-  memset(nr_mac->dl_harq_info, 0, sizeof(nr_mac->dl_harq_info));
-
-  // for each DL HARQ process, consider the next received transmission for a TB as the very first transmission
-  for (int k = 0; k < NR_MAX_HARQ_PROCESSES; k++)
-    nr_mac->dl_harq_info[k].last_ndi = -1; // initialize to invalid value
+  for (int c = 0; c < 2; c++) {
+    // flush the soft buffers for all DL HARQ processes
+    // for each DL HARQ process, consider the next received transmission for a TB as the very first transmission
+    for (int k = 0; k < NR_MAX_HARQ_PROCESSES; k++) {
+      memset(&nr_mac->dl_harq_info[k][c], 0, sizeof(NR_UE_DL_HARQ_STATUS_t));
+      nr_mac->dl_harq_info[k][c].last_ndi = -1; // initialize to invalid value
+    }
+  }
 
   // release, if any, Temporary C-RNTI
   nr_mac->ra.t_crnti = 0;

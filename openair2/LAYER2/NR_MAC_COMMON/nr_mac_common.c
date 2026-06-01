@@ -5,7 +5,7 @@
 #include <math.h>
 #include "nr_mac.h"
 #include "nr_mac_common.h"
-#include "common/utils/nr/nr_common.h"
+#include "common/utils/bits.h"
 #include <limits.h>
 #include <executables/softmodem-common.h>
 
@@ -3033,7 +3033,7 @@ uint16_t nr_dci_size(const NR_UE_DL_BWP_t *DL_BWP,
       size += 8;
       // TB2
       long *maxCWperDCI = pdsch_Config ? pdsch_Config->maxNrofCodeWordsScheduledByDCI : NULL;
-      if ((maxCWperDCI != NULL) && (*maxCWperDCI == 2)) {
+      if (maxCWperDCI && (*maxCWperDCI == NR_PDSCH_Config__maxNrofCodeWordsScheduledByDCI_n2)) {
         size += 8;
       }
       // HARQ process number – 5 bits if higher layer parameter harq-ProcessNumberSizeDCI-1-1 is configured;
@@ -4129,19 +4129,16 @@ uint16_t compute_pucch_prb_size(uint8_t format,
               O_crc,
               nr_prbs);
 
-  if (format==2){
-    // TODO fix this for multiple CSI reports
-    for (int i = nr_prbs; i > 0; i--) {
-      // compute code rate factor for next prb value
-      int next_prb_factor = (i - 1) * n_symb * Qm * n_re_ctrl * r;
-      // if it does not sa
-      if (O_tot > next_prb_factor)
-        return i;
-    }
+  // TODO fix this for multiple CSI reports
+  for (int i = nr_prbs; i > 0; i--) {
+    // compute code rate factor for next prb value
+    int next_prb_factor = (i - 1) * n_symb * Qm * n_re_ctrl * r;
+    // if it does not sa
+    if (O_tot > next_prb_factor)
+      return i;
   }
-  else{
-    AssertFatal(1==0,"Not yet implemented");
-  }
+
+  AssertFatal(false , "Couldn't find adequate number of PRBs\n");
   return 0;
 }
 

@@ -1,9 +1,5 @@
 # SPDX-License-Identifier: LicenseRef-CSSL-1.0
 
-# Noise device static lib
-add_library(noise_device STATIC noise_device.c)
-target_link_libraries(noise_device PRIVATE log_headers)
-
 # vrtsim module
 add_library(vrtsim MODULE
   vrtsim.c
@@ -20,12 +16,15 @@ target_link_libraries(vrtsim
   PRIVATE
     SIMU
     shm_td_iq_channel
-    actor
     noise_device
     log_headers
-    pthread 
     yaml-cpp
+    channel_pipeline
+    thread-pool
 )
+if (ENABLE_CHANNEL_SIM_CUDA)
+  target_compile_definitions(vrtsim PRIVATE CHANNEL_SIM_CUDA)
+endif()
 
 # Optional taps client
 add_boolean_option(OAI_VRTSIM_TAPS_CLIENT OFF "Enable taps client" ON)

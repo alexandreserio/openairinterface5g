@@ -96,10 +96,6 @@ information on how the images are built.
   - orion: Cross-compilation from Intel to ARM
   - base image from `Dockerfile.base.ubuntu.cross-arm64`
   - build image from `Dockerfile.build.ubuntu.cross-arm64` (no target images)
-- [RAN-cppcheck](https://jenkins-oai.eurecom.fr/job/RAN-cppcheck/)
-  ~BUILD-ONLY ~4G-LTE ~5G-NR ~nrUE
-  - bellatrix
-  - performs static code analysis, currently not actively enforced
 - [RAN-RHEL8-Cluster-Image-Builder](https://jenkins-oai.eurecom.fr/job/RAN-RHEL8-Cluster-Image-Builder/)
   ~BUILD-ONLY ~4G-LTE ~5G-NR ~nrUE
   - cluster (`Asterix-OC-oaicicd-session` resource): RHEL image build using the OpenShift Cluster (using gcc/clang)
@@ -245,6 +241,12 @@ information on how the images are built.
   ~5G-NR ~nrUE
   - 5G-NR SA test setup: OAI VNF + PNF/NVIDIA CUBB on gracehopper1-oai + WNC RU, OAIUE on jetson1-oai + B210, OAI CN5G
   - OpenShift cluster for CN deployment and container images for gNB and UE deployment
+- [RAN-SA-FHI72-MPLANE-CN5G](https://jenkins-oai.eurecom.fr/view/RAN/job/RAN-SA-FHI72-MPLANE-CN5G/)
+  ~5G-NR
+  - cacofonix + FHI72 + Benetel550 (gNB), AmarisoftUE, OAI CN5G
+  - OpenShift cluster for CN deployment
+  - FHI 7.2 testing with 40 MHz, 4x4 MIMO configuration and 100 MHz, 2x2 MIMO configuration
+  - FHI 7.2 Configuration and Performance Management via NETCONF session of an O-RU
 
 ### RAN-CI-NSA-Trigger
 

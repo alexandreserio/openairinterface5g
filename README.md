@@ -8,8 +8,9 @@
     <a href="https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-CSSL--v1.0-blue" alt="License"></a>
     <a href="https://releases.ubuntu.com/22.04/"><img src="https://img.shields.io/badge/OS-Ubuntu22-Green" alt="Supported OS Ubuntu 22"></a>
     <a href="https://releases.ubuntu.com/24.04/"><img src="https://img.shields.io/badge/OS-Ubuntu24-Green" alt="Supported OS Ubuntu 24"></a>
+    <a href="https://releases.ubuntu.com/26.04/"><img src="https://img.shields.io/badge/OS-Ubuntu26-Green" alt="Supported OS Ubuntu 26"></a>
     <a href="https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux"><img src="https://img.shields.io/badge/OS-RHEL9-Green" alt="Supported OS RHEL9"></a>
-    <a href="https://getfedora.org/en/workstation/"><img src="https://img.shields.io/badge/OS-Fedore41-Green" alt="Supported OS Fedora 43"></a>
+    <a href="https://getfedora.org/en/workstation/"><img src="https://img.shields.io/badge/OS-Fedore44-Green" alt="Supported OS Fedora 44"></a>
 </p>
 
 <p align="center">
@@ -40,7 +41,18 @@ Some files, such as for orchestration, are distributed under
 [MIT license](preferred)(MIT.txt). Documentation is distributed under
 [Creative Commons Attribution 4.0 International license](LICENSES/preferred/CC-BY-4.0.txt).
 
-Please see [NOTICE](NOTICE.md) for other licenses which are used in the software.
+All the files without an explicit copyright header have an implicit "Copyright
+of OpenAirInterface Authors".
+
+Please see [NOTICE](NOTICE) for other licenses which are used in the software.
+
+In the past OAI source code has been re-licensed sometimes, here is the
+history:
+
+1. CSSL v1.0 starting tag 2026.w14
+2. OAI Public License v1.1 starting tag v1.0 till af4b0d53
+3. OAI Public License v1.0: starting tag v.04 till v1.0
+4. GPL 3: starting tag v.0 till v.04 (only initial implementation of 4G)
 
 # Where to Start #
 

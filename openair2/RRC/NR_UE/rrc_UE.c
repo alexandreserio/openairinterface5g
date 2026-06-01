@@ -24,6 +24,7 @@
 
 #include "rrc_defs.h"
 #include "rrc_proto.h"
+#include "verify_RRC.h"
 #include "L2_interface_ue.h"
 #include "LAYER2/NR_MAC_UE/mac_proto.h"
 
@@ -1680,15 +1681,21 @@ NR_UE_RRC_INST_t* nr_rrc_init_ue(char* uecap_file, int instance_id, int num_ant_
   if (uecap_file)
     f = fopen(uecap_file, "r");
   if (f) {
-    char UE_NR_Capability_xer[65536];
-    size_t size = fread(UE_NR_Capability_xer, 1, sizeof UE_NR_Capability_xer, f);
-    if (size == 0 || size == sizeof UE_NR_Capability_xer) {
-      LOG_E(NR_RRC, "UE Capabilities XER file %s is too large (%ld)\n", uecap_file, size);
+    fseek(f, 0, SEEK_END);
+    long file_size = ftell(f);
+    rewind(f);
+    AssertFatal(file_size <= 1024 * 1024,
+                "UE Capabilities XER file %s is too large (%ld bytes, max 1MB)\n", uecap_file, file_size);
+    char *UE_NR_Capability_xer = malloc_or_fail(file_size);
+    size_t size = fread(UE_NR_Capability_xer, 1, file_size, f);
+    if (size == 0) {
+      LOG_E(NR_RRC, "UE Capabilities XER file %s: read error\n", uecap_file);
     } else {
       asn_dec_rval_t dec_rval =
           xer_decode(0, &asn_DEF_NR_UE_NR_Capability, (void *)&rrc->UECap.UE_NR_Capability, UE_NR_Capability_xer, size);
       assert(dec_rval.code == RC_OK);
     }
+    free(UE_NR_Capability_xer);
     fclose(f);
     /* Verify consistency of num PHY antennas vs UE Capabilities */
     verify_ue_cap(rrc->UECap.UE_NR_Capability, num_ant_tx);
@@ -2014,8 +2021,6 @@ static void nr_rrc_ue_decode_NR_BCCH_DL_SCH_Message(NR_UE_RRC_INST_t *rrc,
                                                     const uint8_t gNB_index,
                                                     uint8_t *const Sdu,
                                                     const uint8_t Sdu_len,
-                                                    const uint8_t rsrq,
-                                                    const uint8_t rsrp,
                                                     int hfn,
                                                     int frame,
                                                     int slot)
@@ -2067,7 +2072,7 @@ static void nr_rrc_ue_decode_NR_BCCH_DL_SCH_Message(NR_UE_RRC_INST_t *rrc,
 static void rrc_ue_generate_RRCSetupComplete(const NR_UE_RRC_INST_t *rrc, const uint8_t Transaction_id)
 {
   uint8_t buffer[100];
-  as_nas_info_t initialNasMsg;
+  as_nas_info_t initialNasMsg = {0};
 
   if (IS_SA_MODE(get_softmodem_params())) {
     nr_ue_nas_t *nas = get_ue_nas_info(rrc->ue_id);
@@ -2556,9 +2561,10 @@ static void nr_rrc_ue_process_ueCapabilityEnquiry(NR_UE_RRC_INST_t *rrc, NR_UECa
       ue_CapabilityRAT_Container->rat_Type = NR_RAT_Type_nr;
       OCTET_STRING_fromBuf(&ue_CapabilityRAT_Container->ue_CapabilityRAT_Container, (const char *)rrc->UECap.sdu, rrc->UECap.sdu_size);
       asn1cSeqAdd(&UEcapList->list, ue_CapabilityRAT_Container);
-      uint8_t buffer[500];
-      asn_enc_rval_t enc_rval = uper_encode_to_buffer(&asn_DEF_NR_UL_DCCH_Message, NULL, (void *)&ul_dcch_msg, buffer, 500);
-      AssertFatal (enc_rval.encoded > 0, "ASN1 message encoding failed (%s, %jd)!\n", enc_rval.failed_type->name, enc_rval.encoded);
+      uint8_t buffer[MAX_UE_NR_CAPABILITY_SIZE + 16];
+      asn_enc_rval_t enc_rval =
+          uper_encode_to_buffer(&asn_DEF_NR_UL_DCCH_Message, NULL, (void *)&ul_dcch_msg, buffer, sizeof(buffer));
+      AssertFatal(enc_rval.encoded > 0, "ASN1 message encoding failed (%s, %jd)!\n", enc_rval.failed_type->name, enc_rval.encoded);
 
       if (LOG_DEBUGFLAG(DEBUG_ASN1)) {
         xer_fprint(stdout, &asn_DEF_NR_UL_DCCH_Message, (void *)&ul_dcch_msg);
@@ -3067,6 +3073,7 @@ static void nr_rrc_handle_meas_indication(NR_UE_RRC_INST_t *rrc, NRRrcMacMeasDat
 
 void *rrc_nrue_task(void *args_p)
 {
+  UNUSED(args_p);
   itti_mark_task_ready(TASK_RRC_NRUE);
   while (1) {
     rrc_nrue(NULL);
@@ -3075,6 +3082,7 @@ void *rrc_nrue_task(void *args_p)
 
 void *rrc_nrue(void *notUsed)
 {
+  UNUSED(notUsed);
   MessageDef *msg_p = NULL;
   itti_receive_msg(TASK_RRC_NRUE, &msg_p);
   instance_t instance = ITTI_MSG_DESTINATION_INSTANCE(msg_p);
@@ -3115,6 +3123,11 @@ void *rrc_nrue(void *notUsed)
     }
     break;
 
+  case NR_RRC_MAC_VERIFY:
+    LOG_W(NR_RRC, "L2 verification of RRC consistency failed\n");
+    handle_rlf_detection(rrc);
+    break;
+
   case NR_RRC_MAC_INAC_IND:
     LOG_D(NR_RRC, "Received data inactivity indication from lower layers\n");
     NR_Release_Cause_t release_cause = RRC_CONNECTION_FAILURE;
@@ -3152,24 +3165,15 @@ void *rrc_nrue(void *notUsed)
     if (bcch->is_bch)
       nr_rrc_ue_decode_NR_BCCH_BCH_Message(rrc, bcch->gnb_index, bcch->phycellid, bcch->ssb_arfcn, bcch->sdu, bcch->sdu_size);
     else
-      nr_rrc_ue_decode_NR_BCCH_DL_SCH_Message(rrc,
-                                              bcch->gnb_index,
-                                              bcch->sdu,
-                                              bcch->sdu_size,
-                                              bcch->rsrq,
-                                              bcch->rsrp,
-                                              bcch->hfn,
-                                              bcch->frame,
-                                              bcch->slot);
+      nr_rrc_ue_decode_NR_BCCH_DL_SCH_Message(rrc, bcch->gnb_index, bcch->sdu, bcch->sdu_size, bcch->hfn, bcch->frame, bcch->slot);
     break;
 
   case NR_RRC_MAC_SBCCH_DATA_IND:
     LOG_D(NR_RRC, "[UE %ld] Received %s: gNB %d\n", instance, ITTI_MSG_NAME(msg_p), NR_RRC_MAC_SBCCH_DATA_IND(msg_p).gnb_index);
     NRRrcMacSBcchDataInd *sbcch = &NR_RRC_MAC_SBCCH_DATA_IND(msg_p);
-
-    nr_rrc_ue_decode_NR_SBCCH_SL_BCH_Message(rrc, sbcch->gnb_index,sbcch->frame, sbcch->slot, sbcch->sdu,
-                                             sbcch->sdu_size, sbcch->rx_slss_id);
+    nr_rrc_ue_decode_NR_SBCCH_SL_BCH_Message(rrc, sbcch->sdu, sbcch->sdu_size, sbcch->rx_slss_id);
     break;
+
   case NR_RRC_MAC_MEAS_DATA_IND:
     nr_rrc_handle_meas_indication(rrc, &NR_RRC_MAC_MEAS_DATA_IND(msg_p));
     break;

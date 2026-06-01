@@ -73,7 +73,8 @@
 #define inMicroS(a) (((double)(a))/(get_cpu_freq_GHz()*1000.0))
 #include "SIMULATION/LTE_PHY/common_sim.h"
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
+#include <cuda.h>
 #include <cuda_runtime.h>
 #include "SIMULATION/TOOLS/oai_cuda.h"
 #endif
@@ -269,7 +270,22 @@ void nr_dlsim_preprocessor(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pp_pdsch)
   AssertFatal(sched_pdsch.mcs >= 0, "invalid mcs %d\n", sched_pdsch.mcs);
   AssertFatal(current_BWP->mcsTableIdx >= 0 && current_BWP->mcsTableIdx <= 2, "invalid mcsTableIdx %d\n", current_BWP->mcsTableIdx);
 
-  post_process_dlsch(nr_mac, pp_pdsch, UE_info, &sched_pdsch);
+  nr_dl_candidate_t candidate = {
+      .UE = UE_info,
+      .rnti = UE_info->rnti,
+      .is_retx = sched_ctrl->harq_processes[sched_pdsch.dl_harq_pid].round > 0,
+      .retx_harq_pid = sched_pdsch.dl_harq_pid,
+      .pending_bytes = sched_ctrl->num_total_bytes,
+      .mcs_table = current_BWP->mcsTableIdx,
+      .bwp_start = sched_pdsch.bwp_info.bwpStart,
+      .bwp_size = sched_pdsch.bwp_info.bwpSize,
+  };
+  for (int i = 0; i < seq_arr_size(&sched_ctrl->lc_config); ++i) {
+    const nr_lc_config_t *c = seq_arr_at(&sched_ctrl->lc_config, i);
+    candidate.pending_bytes_per_lcid[c->lcid] = sched_ctrl->rlc_status[c->lcid].bytes_in_buffer;
+  }
+
+  post_process_dlsch(nr_mac, pp_pdsch, UE_info, &sched_pdsch, &candidate);
 }
 
 nrUE_params_t nrUE_params;
@@ -382,9 +398,12 @@ int main(int argc, char **argv)
   uint8_t  dlsch_threads = 0;
   int chest_type[2] = {0};
   uint8_t  max_ldpc_iterations = 5;
+  // number of PDSCH symbols per thread = 0 means do not use thread pool
+  int num_pdsch_symbols_per_thread = 0;
   if ((uniqCfg = load_configmodule(argc, argv, CONFIG_ENABLECMDLINEONLY)) == 0) {
     exit_fun("[NR_DLSIM] Error, configuration module init failed\n");
   }
+  int tx_amp = 36;
 
   randominit();
 
@@ -394,14 +413,14 @@ int main(int argc, char **argv)
 
   void *h_tx_sig_pinned = NULL;
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
   void *d_tx_sig = NULL, *d_intermediate_sig = NULL, *d_final_output = NULL;
   void *d_curand_states = NULL;
   void *h_final_output_pinned = NULL;
   void *d_channel_coeffs_gpu = NULL;
 #endif
 
-  while ((c = getopt(argc, argv, "--:O:f:hA:p:f:g:i:n:s:S:t:v:x:y:z:o:H:M:N:F:GR:d:PI:L:a:b:e:m:w:T:U:q:X:Y:Z:")) != -1) {
+  while ((c = getopt(argc, argv, "--:O:f:hA:p:f:g:i:n:s:S:t:v:x:y:z:o:H:M:N:F:GR:d:PI:L:a:b:e:m:w:T:U:q:X:Y:Z:Q:")) != -1) {
     /* ignore long options starting with '--', option '-O' and their arguments that are handled by configmodule */
     /* with this opstring getopt returns 1 for non-option arguments, refer to 'man 3 getopt' */
     if (c == 1 || c == '-' || c == 'O')
@@ -410,7 +429,7 @@ int main(int argc, char **argv)
     printf("handling optarg %c\n",c);
     switch (c) {
     case 'f':
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
       if (strcmp(optarg, "cuda") == 0) {
         use_cuda = 1;
       } else
@@ -583,6 +602,10 @@ int main(int argc, char **argv)
       gNBthreads[sizeof(gNBthreads)-1]=0;
       break;
 
+    case 'Y':
+      num_pdsch_symbols_per_thread = atoi(optarg);
+      break;
+
     case 'Z' :
       filename_csv = strdup(optarg);
       AssertFatal(filename_csv != NULL, "strdup() error: errno %d\n", errno);
@@ -594,6 +617,10 @@ int main(int argc, char **argv)
 
     case 'H':
       slot = atoi(optarg);
+      break;
+
+    case 'Q':
+      tx_amp = atoi(optarg);
       break;
 
     default:
@@ -627,7 +654,7 @@ int main(int argc, char **argv)
       printf("-d number of dlsch threads, 0: no dlsch parallelization\n");
       printf("-e MSC index\n");
       printf("-f <flag> Enable optional feature flag. Available flags:\n");
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
       printf("          cuda    Enable CUDA channel simulation\n");
 #else
       printf("          (none)  No optional features were compiled into this executable\n");
@@ -657,6 +684,7 @@ int main(int argc, char **argv)
       printf("-T Enable PTRS, arguments list L_PTRS{0,1,2} K_PTRS{2,4}, e.g. -T 2 0 2 \n");
       printf("-U Change DMRS Config, arguments list DMRS TYPE{0=A,1=B} DMRS AddPos{0:2} DMRS ConfType{1:2}, e.g. -U 3 0 2 1 \n");
       printf("-X gNB thread pool configuration, n => no threads\n");
+      printf("-Y Number of symbols processed per PDSCH generation thread\n");
       printf("-Z Output filename (.csv format) for stats\n");
       exit (-1);
       break;
@@ -668,7 +696,7 @@ int main(int argc, char **argv)
   /* initialize the sin table */
   InitSinLUT();
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
   init_cuda_chsim_buffers(use_cuda,
                           n_tx,
                           n_rx,
@@ -681,7 +709,7 @@ int main(int argc, char **argv)
                           &d_channel_coeffs_gpu);
 #endif
 
-#if !defined(ENABLE_CUDA) || !use_cuda
+#if !defined(CHANNEL_SIM_CUDA) || !use_cuda
   printf("Pre-allocating padded host memory for the CPU channel pipeline...\n");
   int num_samples_alloc = 153600;
   const int max_padding_alloc = 256 - 1;
@@ -707,6 +735,7 @@ int main(int argc, char **argv)
   gNB = RC.gNB[0];
   gNB->ofdm_offset_divisor = UINT_MAX;
   gNB->phase_comp = true; // we need to perform phase compensation, otherwise everything will fail
+  gNB->TX_AMP = (int16_t)(32767.0 / pow(10.0, .05 * (double)(tx_amp)));
   frame_parms = &gNB->frame_parms; //to be initialized I suppose (maybe not necessary for PBCH)
   frame_parms->nb_antennas_tx = n_tx;
   frame_parms->nb_antennas_rx = n_rx;
@@ -715,6 +744,7 @@ int main(int argc, char **argv)
 
   AssertFatal((gNB->if_inst = NR_IF_Module_init(0)) != NULL, "Cannot register interface");
   gNB->if_inst->NR_PHY_config_req = nr_phy_config_request;
+  gNB->num_pdsch_symbols_per_thread = num_pdsch_symbols_per_thread;
 
   NR_ServingCellConfigCommon_t *scc = calloc(1,sizeof(*scc));;
   prepare_scc(scc);
@@ -858,7 +888,7 @@ int main(int argc, char **argv)
                                 0,
                                 0);
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
   float *h_channel_coeffs = NULL;
   if (use_cuda) {
     int num_links = n_tx * n_rx;
@@ -973,7 +1003,7 @@ int main(int argc, char **argv)
   UE->phy_sim_pdsch_rxdataF_comp = calloc(sizeof(int32_t *) * UE->frame_parms.nb_antennas_rx * g_nrOfLayers, rx_size);
   UE->phy_sim_pdsch_dl_ch_estimates = calloc(sizeof(int32_t *) * UE->frame_parms.nb_antennas_rx * g_nrOfLayers, rx_size);
   UE->phy_sim_pdsch_dl_ch_estimates_ext = calloc(sizeof(int32_t *) * UE->frame_parms.nb_antennas_rx * g_nrOfLayers, rx_size);
-  int a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER*NR_MAX_NB_LAYERS;  //number of segments to be allocated
+  int a_segments = MAX_NUM_NR_DLSCH_SEGMENTS; // number of segments to be allocated
   if (g_rbSize != 273) {
     a_segments = a_segments*g_rbSize;
     a_segments = (a_segments/273)+1;
@@ -1205,13 +1235,20 @@ int main(int argc, char **argv)
         }
 
         // Apply MIMO Channel
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
         if (use_cuda) {
 #if defined(USE_UNIFIED_MEMORY)
+#if defined(CUDA_VERSION) && CUDA_VERSION >= 13000 
+          struct cudaMemLocation deviceId;
+          deviceId.type = cudaMemLocationTypeDevice;
+          cudaGetDevice(&deviceId.id);
+          cudaMemPrefetchAsync(d_tx_sig, n_tx * padded_slot_length * sizeof(float) * 2, deviceId, 0, 0);
+#else
           int deviceId;
           cudaGetDevice(&deviceId);
           cudaMemPrefetchAsync(d_tx_sig, n_tx * padded_slot_length * sizeof(float) * 2, deviceId, 0);
 #endif
+#endif		
           start_meas(&pipeline_stats);
           random_channel(gNB2UE, 0);
           int num_links = gNB2UE->nb_tx * gNB2UE->nb_rx;
@@ -1302,12 +1339,14 @@ int main(int argc, char **argv)
 
         int16_t *UE_llr = (int16_t*)UE->phy_sim_pdsch_llr;
 
-        TBS                  = dlsch0->dlsch_config.TBS;
-        uint16_t length_dmrs = get_num_dmrs(dlsch0->dlsch_config.dlDmrsSymbPos);
-        uint16_t nb_rb       = dlsch0->dlsch_config.number_rbs;
-        uint8_t  nb_re_dmrs  = dlsch0->dlsch_config.dmrsConfigType == NFAPI_NR_DMRS_TYPE1 ? 6*dlsch0->dlsch_config.n_dmrs_cdm_groups : 4*dlsch0->dlsch_config.n_dmrs_cdm_groups;
-        uint8_t  mod_order   = dlsch0->dlsch_config.qamModOrder;
-        uint8_t  nb_symb_sch = dlsch0->dlsch_config.number_symbols;
+        TBS = phy_data.dlsch_config.cw_info[0].TBS;
+        uint16_t length_dmrs = get_num_dmrs(phy_data.dlsch_config.dlDmrsSymbPos);
+        uint16_t nb_rb = phy_data.dlsch_config.number_rbs;
+        uint8_t nb_re_dmrs = phy_data.dlsch_config.dmrsConfigType == NFAPI_NR_DMRS_TYPE1 ?
+                             6 * phy_data.dlsch_config.n_dmrs_cdm_groups :
+                             4 * phy_data.dlsch_config.n_dmrs_cdm_groups;
+        uint8_t mod_order = phy_data.dlsch_config.cw_info[0].qamModOrder;
+        uint8_t nb_symb_sch = phy_data.dlsch_config.number_symbols;
         uint32_t unav_res = ptrsSymbPerSlot * ptrsRePerSymb;
         available_bits = nr_get_G(nb_rb, nb_symb_sch, nb_re_dmrs, length_dmrs, unav_res, mod_order, pdsch_pdu_rel15->nrOfLayers);
         if (pdu_bit_map & 0x1) {
@@ -1449,10 +1488,10 @@ int main(int argc, char **argv)
           const int s = pdsch_pdu_rel15->StartSymbolIndex;
           const int n = pdsch_pdu_rel15->NrOfSymbols;
           for (int i = s; i < s + n; i++) {
-            const uint32_t dmrsBitMap = phy_data.dlsch[0].dlsch_config.dlDmrsSymbPos;
-            const uint32_t dmrsCfg = phy_data.dlsch[0].dlsch_config.dmrsConfigType;
-            const uint32_t nrb = phy_data.dlsch[0].dlsch_config.number_rbs;
-            const uint32_t ncdmg = phy_data.dlsch[0].dlsch_config.n_dmrs_cdm_groups;
+            const uint32_t dmrsBitMap = phy_data.dlsch_config.dlDmrsSymbPos;
+            const uint32_t dmrsCfg = phy_data.dlsch_config.dmrsConfigType;
+            const uint32_t nrb = phy_data.dlsch_config.number_rbs;
+            const uint32_t ncdmg = phy_data.dlsch_config.n_dmrs_cdm_groups;
             const uint32_t numValidReSym = ((dmrsBitMap >> i) & 1)
                                               ? ((dmrsCfg == NFAPI_NR_DMRS_TYPE1) ? nrb * (12 - 6 * ncdmg) : nrb * (12 - 4 * ncdmg))
                                               : (nrb * 12);
@@ -1504,7 +1543,7 @@ int main(int argc, char **argv)
     free(r_im[i]);
   }
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
   free_cuda_chsim_buffers(use_cuda,
                           &d_tx_sig,
                           &d_intermediate_sig,

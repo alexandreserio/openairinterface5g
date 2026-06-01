@@ -17,6 +17,7 @@
 #include "nfapi_nr_interface_scf.h"
 #include "common/utils/threadPool/task_ans.h"
 #include "common/utils/threadPool/thread-pool.h"
+#include "common/utils/threadPool/notified_fifo.h"
 
 #define MAX_BANDS_PER_RRU 4
 #define MAX_RRU_CONFIG_SIZE 1024
@@ -33,14 +34,6 @@ typedef enum {
   calib_prach_tx=6,
   rx_dump_frame=7,
 } runmode_t;
-
-/*! \brief Extension Type */
-typedef enum {
-  CYCLIC_PREFIX,
-  CYCLIC_SUFFIX,
-  ZEROS,
-  NONE
-} Extension_t;
 
 enum transmission_access_mode {
   NO_ACCESS=0,
@@ -511,7 +504,7 @@ typedef struct RU_t_s {
   int (*stop_rf)(struct RU_t_s *ru);
   /// function pointer to initialization function for radio interface
   int (*start_if)(struct RU_t_s *ru, struct PHY_VARS_eNB_s *eNB);
-  int (*nr_start_if)(struct RU_t_s *ru, struct PHY_VARS_gNB_s *gNB);
+  int (*nr_start_if)(struct RU_t_s *ru);
   /// function pointer to RX front-end processing routine (DFTs/prefix removal or NULL)
   void (*feprx)(struct RU_t_s *ru, int subframe);
   /// function pointer to TX front-end processing routine (IDFTs and prefix removal or NULL)
@@ -569,7 +562,7 @@ typedef struct RU_t_s {
   /// beamforming weight vectors
   int32_t **beam_weights[NUMBER_OF_eNB_MAX+1][15];
   /// received frequency-domain signal for PRACH (IF4p5 RRU)
-  int16_t **prach_rxsigF[NUMBER_OF_NR_RU_PRACH_OCCASIONS_MAX];
+  int16_t **prach_rxsigF[12];
   /// received frequency-domain signal for PRACH BR (IF4p5 RRU)
   int16_t **prach_rxsigF_br[4];
   /// sequence number for IF5

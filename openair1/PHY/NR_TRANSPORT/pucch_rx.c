@@ -25,7 +25,7 @@
 #include "nfapi/oai_integration/vendor_ext.h"
 #include "nfapi/oai_integration/vendor_ext.h"
 #include "SCHED_NR/sched_nr.h"
-#include "reverse_bits.h"
+#include "bits.h"
 
 #include "T.h"
 #include "nr_phy_common.h"
@@ -33,40 +33,32 @@
 //#define DEBUG_NR_PUCCH_RX 1
 void nr_fill_pucch(PHY_VARS_gNB *gNB, int frame, int slot, nfapi_nr_pucch_pdu_t *pucch_pdu)
 {
-  for (int i = 0; i < gNB->max_nb_pucch; i++) {
-    NR_gNB_PUCCH_t *pucch = &gNB->pucch[i];
-    if (pucch->active == false) {
-      pucch->frame = frame;
-      pucch->slot = slot;
-      pucch->active = true;
-      pucch->beam_nb = 0;
-      if (gNB->common_vars.beam_id) {
-        int fapi_beam_idx = pucch_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx;
-        int bitmap = SL_to_bitmap(pucch_pdu->start_symbol_index, pucch_pdu->nr_of_symbols);
-        pucch->beam_nb = beam_index_allocation(gNB->enable_analog_das,
-                                               fapi_beam_idx,
-                                               &gNB->common_vars,
-                                               slot,
-                                               gNB->frame_parms.symbols_per_slot,
-                                               bitmap);
-      }
-      memcpy((void *)&pucch->pucch_pdu, (void *)pucch_pdu, sizeof(nfapi_nr_pucch_pdu_t));
-      LOG_D(PHY,
-            "Programming PUCCH[%d] for %d.%d, format %d, nb_harq %d, nb_sr %d, nb_csi %d\n",
-            i,
-            pucch->frame,
-            pucch->slot,
-            pucch->pucch_pdu.format_type,
-            pucch->pucch_pdu.bit_len_harq,
-            pucch->pucch_pdu.sr_flag,
-            pucch->pucch_pdu.bit_len_csi_part1);
-      return;
-    }
+  LOG_D(PHY,
+        "%4d.%2d UE %04x Programming PUCCH format %d, nb_harq %d, nb_sr %d, nb_csi %d\n",
+        frame,
+        slot,
+        pucch_pdu->rnti,
+        pucch_pdu->format_type,
+        pucch_pdu->bit_len_harq,
+        pucch_pdu->sr_flag,
+        pucch_pdu->bit_len_csi_part1);
+  NR_gNB_PUCCH_job_t pucch = {.frame = frame, .slot = slot, .pucch_pdu = *pucch_pdu};
+  if (gNB->common_vars.beam_id) {
+    int fapi_beam_idx = pucch_pdu->beamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx;
+    int bitmap = SL_to_bitmap(pucch_pdu->start_symbol_index, pucch_pdu->nr_of_symbols);
+    pucch.beam_nb = beam_index_allocation(gNB->enable_analog_das,
+                                           fapi_beam_idx,
+                                           &gNB->common_vars,
+                                           slot,
+                                           gNB->frame_parms.symbols_per_slot,
+                                           bitmap);
   }
-  LOG_W(PHY, "PUCCH list is full\n");
+  bool found = spsc_q_put(&gNB->pucch_queue, &pucch, sizeof(pucch));
+  if (!found)
+    LOG_W(NR_PHY, "PUCCH list is full: dropping PUCCH UE %04x\n", pucch_pdu->rnti);
 }
 
-int get_pucch0_cs_lut_index(PHY_VARS_gNB *gNB, nfapi_nr_pucch_pdu_t *pucch_pdu)
+int get_pucch0_cs_lut_index(PHY_VARS_gNB *gNB, const nfapi_nr_pucch_pdu_t *pucch_pdu)
 {
   int i = 0;
 
@@ -129,7 +121,7 @@ void nr_decode_pucch0(PHY_VARS_gNB *gNB,
                       int frame,
                       int slot,
                       nfapi_nr_uci_pucch_pdu_format_0_1_t *uci_pdu,
-                      nfapi_nr_pucch_pdu_t *pucch_pdu)
+                      const nfapi_nr_pucch_pdu_t *pucch_pdu)
 {
   NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
   int soffset = (slot % RU_RX_SLOT_DEPTH) * frame_parms->symbols_per_slot * frame_parms->ofdm_symbol_size;
@@ -1132,7 +1124,7 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
                       int frame,
                       int slot,
                       nfapi_nr_uci_pucch_pdu_format_2_3_4_t *uci_pdu,
-                      nfapi_nr_pucch_pdu_t *pucch_pdu)
+                      const nfapi_nr_pucch_pdu_t *pucch_pdu)
 {
   NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
   // pucch_GroupHopping_t pucch_GroupHopping = pucch_pdu->group_hop_flag + (pucch_pdu->sequence_hop_flag<<1);
@@ -1591,69 +1583,4 @@ void nr_decode_pucch2(PHY_VARS_gNB *gNB,
   if (pucch_pdu->bit_len_csi_part2 > 0) {
     uci_pdu->pduBitmap |= 8;
   }
-}
-
-void nr_dump_uci_stats(FILE *fd, PHY_VARS_gNB *gNB, int frame)
-{
-  int strpos = 0;
-  char output[16384];
-
-  for (int i = 0; i < MAX_MOBILES_PER_GNB; i++) {
-    NR_gNB_PHY_STATS_t *stats = &gNB->phy_stats[i];
-    if (!stats->active)
-      return;
-    NR_gNB_UCI_STATS_t *uci_stats = &stats->uci_stats;
-    if (uci_stats->pucch0_sr_trials > 0)
-      strpos += sprintf(output + strpos,
-                        "UCI %d RNTI %x: pucch0_sr_trials %d, pucch0_n00 %d dB, pucch0_n01 %d dB, pucch0_sr_thres %d dB, current "
-                        "pucch1_stat0 %d dB, current pucch1_stat1 %d dB, positive SR count %d\n",
-                        i,
-                        stats->rnti,
-                        uci_stats->pucch0_sr_trials,
-                        uci_stats->pucch0_n00,
-                        uci_stats->pucch0_n01,
-                        uci_stats->pucch0_sr_thres,
-                        dB_fixed(uci_stats->current_pucch0_sr_stat0),
-                        dB_fixed(uci_stats->current_pucch0_sr_stat1),
-                        uci_stats->pucch0_positive_SR);
-    if (uci_stats->pucch01_trials > 0)
-      strpos += sprintf(output + strpos,
-                        "UCI %d RNTI %x: pucch01_trials %d, pucch0_n00 %d dB, pucch0_n01 %d dB, pucch0_thres %d dB, current "
-                        "pucch0_stat0 %d dB, current pucch1_stat1 %d dB, pucch01_DTX %d\n",
-                        i,
-                        stats->rnti,
-                        uci_stats->pucch01_trials,
-                        uci_stats->pucch0_n01,
-                        uci_stats->pucch0_n01,
-                        uci_stats->pucch0_thres,
-                        dB_fixed(uci_stats->current_pucch0_stat0),
-                        dB_fixed(uci_stats->current_pucch0_stat1),
-                        uci_stats->pucch01_DTX);
-
-    if (uci_stats->pucch02_trials > 0)
-      strpos += sprintf(output + strpos,
-                        "UCI %d RNTI %x: pucch01_trials %d, pucch0_n00 %d dB, pucch0_n01 %d dB, pucch0_thres %d dB, current "
-                        "pucch0_stat0 %d dB, current pucch0_stat1 %d dB, pucch01_DTX %d\n",
-                        i,
-                        stats->rnti,
-                        uci_stats->pucch02_trials,
-                        uci_stats->pucch0_n00,
-                        uci_stats->pucch0_n01,
-                        uci_stats->pucch0_thres,
-                        dB_fixed(uci_stats->current_pucch0_stat0),
-                        dB_fixed(uci_stats->current_pucch0_stat1),
-                        uci_stats->pucch02_DTX);
-
-    if (uci_stats->pucch2_trials > 0)
-      strpos += sprintf(output + strpos,
-                        "UCI %d RNTI %x: pucch2_trials %d, pucch2_DTX %d\n",
-                        i,
-                        stats->rnti,
-                        uci_stats->pucch2_trials,
-                        uci_stats->pucch2_DTX);
-  }
-  if (fd)
-    fprintf(fd, "%s", output);
-  else
-    printf("%s", output);
 }

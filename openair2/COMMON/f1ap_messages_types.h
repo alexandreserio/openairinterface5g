@@ -161,8 +161,7 @@ typedef struct f1ap_du_register_req_s {
 
 typedef struct f1ap_sib_msg_s {
   /// RRC container with system information owned by gNB-CU
-  uint8_t *SI_container;
-  int SI_container_length;
+  byte_array_t SI_container;
   /// SIB block type, e.g. 2 for sibType2
   int SI_type;
 } f1ap_sib_msg_t;
@@ -438,6 +437,8 @@ typedef struct f1ap_qos_flow_param_s {
     f1ap_dynamic_5qi_t dyn;
   };
   f1ap_arp_t arp;
+  // GBR QoS Flow Information (optional - only for GBR flows)
+  gbr_qos_flow_information_t *gbr_qos_flow_information;
 } f1ap_qos_flow_param_t;
 
 // in 9.2.2.1 Flows Mapped to DRB Item

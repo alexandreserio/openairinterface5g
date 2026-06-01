@@ -79,11 +79,19 @@ oc-cn5g:
 
 oc-cn5g-20897:
   Host: cacofonix
-  NetworkScript: echo "inet 172.21.6.105"
+  NetworkScript: echo "inet 172.21.6.115"
   RunIperf3Server: False
-  Deploy: "! scripts/oc-cn5g-deploy.sh /opt/oai-cn5g-fed-develop-2025-jan oaicicd-core-for-fhi72"
-  Undeploy: "! scripts/oc-cn5g-undeploy.sh /opt/oai-cn5g-fed-develop-2025-jan oaicicd-core-for-fhi72"
-  LogCollect: "! scripts/oc-cn5g-logcollect.sh /opt/oai-cn5g-fed-develop-2025-jan oaicicd-core-for-fhi72 %%log_dir%%"
+  Deploy: "! scripts/oc-cn5g-deploy.sh /opt/oai-cn5g-fed-develop-2026-apr oaicicd-core-for-fhi72"
+  Undeploy: "! scripts/oc-cn5g-undeploy.sh /opt/oai-cn5g-fed-develop-2026-apr oaicicd-core-for-fhi72"
+  LogCollect: "! scripts/oc-cn5g-logcollect.sh /opt/oai-cn5g-fed-develop-2026-apr oaicicd-core-for-fhi72 %%log_dir%%"
+
+oc-cn5g-00105:
+  Host: cacofonix
+  NetworkScript: echo "inet 172.21.6.118"
+  RunIperf3Server: False
+  Deploy: "! scripts/oc-cn5g-deploy.sh /opt/oai-cn5g-fed-develop-2026-apr-00105 oaicicd-core-for-fhi72"
+  Undeploy: "! scripts/oc-cn5g-undeploy.sh /opt/oai-cn5g-fed-develop-2026-apr-00105 oaicicd-core-for-fhi72"
+  LogCollect: "! scripts/oc-cn5g-logcollect.sh /opt/oai-cn5g-fed-develop-2026-apr-00105 oaicicd-core-for-fhi72 %%log_dir%%"
 
 oc-cn5g-00103-ho:
   Host: groot
@@ -143,7 +151,7 @@ ltebox-nano:
     - "sudo su -c 'screen -dm -S simulated_hss /opt/hss_sim0609/starthss'"
     - "sleep 1"
     - "sudo /opt/ltebox/tools/start_mme && sudo /opt/ltebox/tools/start_xGw &"
-    - "sleep 1"
+    - "sleep 2"
   Undeploy: "sudo /opt/ltebox/tools/stop_xGw; sudo /opt/ltebox/tools/stop_mme; sudo killall screen"
   LogCollect: "cp /opt/hss_sim0609/hss.log /opt/ltebox/var/log/{mmeLog.0,s1apcLog.0,s1apsLog.0,s11cLog.0,libLog.0,xGwLog.0} %%log_dir%%"
 
@@ -154,7 +162,7 @@ sabox-nepes:
     - "sudo su -c 'screen -dm -S simulated_5g_hss /opt/hss_sim0609/start_5g_hss'"
     - "sleep 1"
     - "sudo /opt/ltebox/tools/start_sabox < /dev/null &> /dev/null"
-    - "sleep 1"
+    - "sleep 2"
   LogCollect: "cp /opt/hss_sim0609/hss.log /opt/ltebox/var/log/{amfLog.0,ngapcLog.0,ngapcommonLog.0,ngapsLog.0,xGwLog.0,upfLog.0} %%log_dir%%"
   Undeploy: "sudo /opt/ltebox/tools/stop_sabox; sudo killall screen"
 
@@ -165,7 +173,7 @@ ltebox-nepes:
     - "sudo su -c 'screen -dm -S simulated_hss /opt/hss_sim0609/starthss'"
     - "sleep 1"
     - "sudo /opt/ltebox/tools/start_mme && sudo /opt/ltebox/tools/start_xGw &"
-    - "sleep 1"
+    - "sleep 2"
   Undeploy: "sudo /opt/ltebox/tools/stop_xGw; sudo /opt/ltebox/tools/stop_mme; sudo killall screen"
   LogCollect: "cp /opt/hss_sim0609/hss.log /opt/ltebox/var/log/{mmeLog.0,s1apcLog.0,s1apsLog.0,s11cLog.0,libLog.0,xGwLog.0} %%log_dir%%"
 
@@ -181,6 +189,16 @@ amarisoft_ue:
 amarisoft_ue_2x2:
   Host: amariue
   InitScript: /root/lteue-linux-2025-03-15/lteue /root/oaicicd/ran_sa_aw2s_asue_20MHz_2x2/aw2s-multi-00102-2x2-v2.cfg &
+  TermScript: /root/lteue-linux-2025-03-15/ws.js -t 10 127.0.0.1:9002 '{"message":"quit"}' || killall -KILL lteue-avx2
+  NetworkScript: ip netns exec ue1 ip a show dev pdn0
+amarisoft_00105_40MHz:
+  Host: amariue
+  InitScript: /root/lteue-linux-2025-03-15/lteue /root/oaicicd/ran_sa_fhi72_mplane_40MHz/multi-00105-40.cfg &
+  TermScript: /root/lteue-linux-2025-03-15/ws.js -t 10 127.0.0.1:9002 '{"message":"quit"}' || killall -KILL lteue-avx2
+  NetworkScript: ip netns exec ue1 ip a show dev pdn0
+amarisoft_00105_100MHz:
+  Host: amariue
+  InitScript: /root/lteue-linux-2025-03-15/lteue /root/oaicicd/ran_sa_fhi72_mplane_100MHz/multi-00105-100.cfg &
   TermScript: /root/lteue-linux-2025-03-15/ws.js -t 10 127.0.0.1:9002 '{"message":"quit"}' || killall -KILL lteue-avx2
   NetworkScript: ip netns exec ue1 ip a show dev pdn0
 amarisoft_ue_1:

@@ -14,7 +14,7 @@
 // TODO: This should be part of mac instance
 /* TS 38.213 9.2.5.2 UE procedure for multiplexing HARQ-ACK/SR and CSI in a PUCCH */
 /* this is a counter of number of pucch format 4 per subframe */
-static int nb_pucch_format_4_in_subframes[LTE_NUMBER_OF_SUBFRAMES_PER_FRAME] = {0};
+static int nb_pucch_format_4_in_subframes[NR_NUMBER_OF_SUBFRAMES_PER_FRAME] = {0};
 
 /* TS 38.211 Table 6.4.1.3.3.2-1: DM-RS positions for PUCCH format 3 and 4 */
 static const int nb_symbols_excluding_dmrs[11][2][2]
@@ -218,9 +218,11 @@ int get_sum_delta_pucch(NR_UE_MAC_INST_t *mac, int slot, frame_t frame)
   const int num_dl_harq = get_nrofHARQ_ProcessesForPDSCH(&mac->sc_info);
 
   for (int i = 0; i < num_dl_harq; i++) {
-    if (mac->dl_harq_info[i].active && mac->dl_harq_info[i].ul_slot == slot && mac->dl_harq_info[i].ul_frame == frame) {
-      delta_tpc_sum += mac->dl_harq_info[i].delta_pucch;
-      mac->dl_harq_info[i].delta_pucch = 0;
+    for (int c = 0; c < 2; c++) {
+      if (mac->dl_harq_info[i][c].active && mac->dl_harq_info[i][c].ul_slot == slot && mac->dl_harq_info[i][c].ul_frame == frame) {
+        delta_tpc_sum += mac->dl_harq_info[i][c].delta_pucch;
+        mac->dl_harq_info[i][c].delta_pucch = 0;
+      }
     }
   }
   return delta_tpc_sum;

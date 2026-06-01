@@ -72,8 +72,6 @@ void pdsch_processing(PHY_VARS_NR_UE *ue, const UE_nr_rxtx_proc_t *proc, nr_phy_
 
 void processSlotTX(void *arg);
 
-int8_t nr_find_ue(uint16_t rnti, PHY_VARS_eNB *phy_vars_eNB);
-
 /*! \brief UL time alignment procedures for TA application
   @param ue
   @param slot_tx
@@ -104,8 +102,9 @@ void nr_fill_dl_indication(nr_downlink_indication_t *dl_ind,
 void nr_fill_rx_indication(fapi_nr_rx_indication_t *rx_ind,
                            uint8_t pdu_type,
                            PHY_VARS_NR_UE *ue,
-                           NR_UE_DLSCH_t *dlsch0,
-                           NR_UE_DLSCH_t *dlsch1,
+                           int cw_idx,
+                           int harq_pid,
+                           NR_UE_DLSCH_t *dlsch,
                            uint16_t n_pdus,
                            const UE_nr_rxtx_proc_t *proc,
                            void *typeSpecific,
@@ -129,7 +128,6 @@ void nr_pdcch_dci_indication(const UE_nr_rxtx_proc_t *proc,
                              c16_t llr[phy_data->phy_pdcch_config.nb_search_space][max_monOcc][llr_size]);
 
 void nr_ue_csi_im_procedures(PHY_VARS_NR_UE *ue,
-                             const UE_nr_rxtx_proc_t *proc,
                              const c16_t rxdataF[][ue->frame_parms.samples_per_slot_wCP],
                              const fapi_nr_dl_config_csiim_pdu_rel15_t *csiim_config_pdu);
 

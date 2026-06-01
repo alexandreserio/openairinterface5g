@@ -16,13 +16,11 @@
 #ifndef DMRS_NR_H
 #define DMRS_NR_H
 
-#include "PHY/types.h"
 #include "PHY/NR_REFSIG/ss_pbch_nr.h"
 #include "PHY/NR_REFSIG/pss_nr.h"
 #include "PHY/NR_REFSIG/sss_nr.h"
 
 int pseudo_random_sequence(int M_PN, uint32_t *c, uint32_t cinit);
-void lte_gold_new(LTE_DL_FRAME_PARMS *frame_parms, uint32_t lte_gold_table[20][2][14], uint16_t Nid_cell);
 uint16_t get_dmrs_freq_idx_ul(uint16_t n, uint8_t k_prime, uint8_t delta, uint8_t dmrs_type);
 
 uint8_t allowed_xlsch_re_in_dmrs_symbol(uint16_t k,
@@ -39,7 +37,8 @@ void nr_chest_time_domain_avg(NR_DL_FRAME_PARMS *frame_parms,
                               uint8_t num_symbols,
                               uint8_t start_symbol,
                               uint16_t dmrs_bitmap,
-                              uint16_t num_rbs);
+                              uint16_t num_rbs,
+                              uint8_t nb_layers);
 
 int8_t get_num_dmrs_re_per_rb(const uint8_t dmrs_type, const uint8_t num_cdm_grp_no_data);
 

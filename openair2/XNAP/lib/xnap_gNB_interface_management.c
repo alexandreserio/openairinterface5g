@@ -8,7 +8,6 @@
 
 #include "xnap_gNB_interface_management.h"
 #include "xnap_lib_common.h"
-#include "xnap_lib_includes.h"
 
 /**
  * @brief XnAP Setup Request encoding
@@ -451,4 +450,5 @@ bool eq_xnap_setup_failure(const xnap_setup_failure_t *a, const xnap_setup_failu
 void free_xnap_setup_failure(xnap_setup_failure_t *msg)
 {
   // nothing to free
+  UNUSED(msg);
 }

@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: LicenseRef-CSSL-1.0
-  - Build_Proxy
   - Build_Cluster_Image
   - Pull_Cluster_Image
   - Build_eNB
@@ -23,7 +22,6 @@
   - Deploy_Object
   - Stop_Object
   - Undeploy_Object
-  - Cppcheck_Analysis
   - Deploy_Run_OC_PhySim
   - Build_Deploy_PhySim
   - LicenceAndFormattingCheck
