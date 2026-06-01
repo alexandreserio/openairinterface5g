@@ -628,7 +628,7 @@ static void fill_rf_config(RU_t *ru, char *rf_config_file)
       cfg->tx_freq[i] = ru->if_frequency;
     }
 
-    //cfg->tx_gain[i] = ru->att_tx;
+    // cfg->tx_gain[i] = ru->att_tx; [ALEX]
     if(strstr(cfg->sdr_addrs, "x300") != NULL){
       cfg->tx_gain[i] = 31.5 - (double)ru->att_tx;
     } else if(strstr(cfg->sdr_addrs, "b200") != NULL){
@@ -636,6 +636,7 @@ static void fill_rf_config(RU_t *ru, char *rf_config_file)
     } else {
       cfg->tx_gain[i] = 89.75 - (double)ru->att_tx;
     }
+    
     LOG_I(PHY, "Channel %d: setting tx_gain offset %.0f, tx_freq %.0f Hz\n", 
           i, cfg->tx_gain[i],cfg->tx_freq[i]);
   }
@@ -866,7 +867,7 @@ void *ru_thread(void *param)
     }
 
     LOG_I(PHY, "Starting IF interface for RU %d, nb_rx %d\n", ru->idx, ru->nb_rx);
-    AssertFatal(ru->nr_start_if(ru, NULL) == 0, "Could not start the IF device\n");
+    AssertFatal(ru->nr_start_if(ru) == 0, "Could not start the IF device\n");
 
   } else if (ru->if_south == LOCAL_RF) { // configure RF parameters only
     ret = openair0_device_load(&ru->rfdevice,&ru->openair0_cfg);
@@ -1018,7 +1019,8 @@ int start_streaming(RU_t *ru) {
   return ru->ifdevice.thirdparty_startstreaming(&ru->ifdevice);
 }
 
-int nr_start_if(struct RU_t_s *ru, struct PHY_VARS_gNB_s *gNB) {
+int nr_start_if(struct RU_t_s *ru)
+{
   if (ru->if_south <= REMOTE_IF5)
     for (int i = 0; i < ru->nb_rx; i++)
       ru->openair0_cfg.rxbase[i] = ru->common.rxdata[i];
@@ -1026,11 +1028,13 @@ int nr_start_if(struct RU_t_s *ru, struct PHY_VARS_gNB_s *gNB) {
   return ru->ifdevice.trx_start_func(&ru->ifdevice);
 }
 
-int start_rf(RU_t *ru) {
+int start_rf(RU_t *ru)
+{
   return(ru->rfdevice.trx_start_func(&ru->rfdevice));
 }
 
-int stop_rf(RU_t *ru) {
+int stop_rf(RU_t *ru)
+{
   if (ru->rfdevice.trx_get_stats_func) {
     ru->rfdevice.trx_get_stats_func(&ru->rfdevice);
   }

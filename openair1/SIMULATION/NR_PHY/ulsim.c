@@ -74,7 +74,8 @@
 #include "time_meas.h"
 #include "utils.h"
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
+#include <cuda.h>
 #include <cuda_runtime.h>
 #include "SIMULATION/TOOLS/oai_cuda.h"
 #endif
@@ -287,6 +288,7 @@ int main(int argc, char *argv[])
   SCM_t channel_model = AWGN;  //Rayleigh1_anticorr;
   corr_level_t corr_level = CORR_LEVEL_LOW;
   uint16_t N_RB_DL = 106, N_RB_UL = 106, mu = 1;
+  uint8_t length_dmrs = pusch_len1;
 
   // unsigned char frame_type = 0;
   int loglvl = OAILOG_WARNING;
@@ -356,7 +358,7 @@ int main(int argc, char *argv[])
 
   void *h_tx_sig_pinned = NULL;
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
   void *d_tx_sig = NULL, *d_intermediate_sig = NULL, *d_final_output = NULL;
   void *d_curand_states = NULL;
   void *h_final_output_pinned = NULL;
@@ -364,7 +366,7 @@ int main(int argc, char *argv[])
   void *d_channel_coeffs_gpu = NULL;
 #endif
 
-  while ((c = getopt(argc, argv, "--:O:a:b:c:d:ef:g:h:i:jk:m:n:o::p:q:r:s:t:u:v:w:y:z:A:C:F:G:H:I:M:N:PR:S:T:U:L:ZW:E:X:Y:"))
+  while ((c = getopt(argc, argv, "--:O:a:b:c:d:ef:g:h:i:jk:l:m:n:o::p:q:r:s:t:u:v:w:y:z:A:C:F:G:H:I:M:N:PR:S:T:U:L:ZW:E:X:Y:"))
          != -1) {
     /* ignore long options starting with '--', option '-O' and their arguments that are handled by configmodule */
     /* with this opstring getopt returns 1 for non-option arguments, refer to 'man 3 getopt' */
@@ -397,7 +399,7 @@ int main(int argc, char *argv[])
       break;
 
     case 'f':
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
       if (strcmp(optarg, "cuda") == 0) {
         use_cuda = 1;
       } else
@@ -470,6 +472,12 @@ int main(int argc, char *argv[])
       threequarter_fs = 1;
       break;
 
+    case 'l':
+      length_dmrs = atoi(optarg);
+      AssertFatal(length_dmrs == 1 || length_dmrs == 2, "Illegal PUSCH DMRS length %d\n", length_dmrs);
+      printf("PUSCH DMRS length %d\n", length_dmrs);
+      break;
+
     case 'm':
       Imcs = atoi(optarg);
       break;
@@ -490,6 +498,9 @@ int main(int argc, char *argv[])
 
     case 'W':
       precod_nbr_layers = atoi(optarg);
+      AssertFatal(precod_nbr_layers > 0 && precod_nbr_layers <= 4,
+                  "Number of layers per UE %d should be less than or equal to 4\n",
+                  precod_nbr_layers);
       break;
 
     case 'n':
@@ -660,7 +671,7 @@ int main(int argc, char *argv[])
       printf("-d Introduce delay in terms of number of samples\n");
       printf("-e To simulate MSG3 configuration\n");
       printf("-f <flag> Enable optional feature flag. Available flags:\n");
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
       printf("          cuda    Enable CUDA channel simulation\n");
 #else
       printf("          (none)  No optional features were compiled into this executable\n");
@@ -670,6 +681,7 @@ int main(int argc, char *argv[])
       printf("-i Change channel estimation technique. Arguments list: Number of arguments=2, Frequency domain {0:Linear interpolation, 1:PRB based averaging}, Time domain {0:Estimates of last DMRS symbol, 1:Average of DMRS symbols}. e.g. -i 1,0\n");
       printf("-j Save signal buffers in binary format.");
       printf("-k 3/4 sampling\n");
+      printf("-l PUSCH DMRS length: 1 or 2\n");
       printf("-m MCS value\n");
       printf("-n Number of trials to simulate\n");
       printf("-o Enable UCI on PUSCH. Optionally accepts input file (without space). This feature is not yet available in gNB so only used to verify with MATLAB generated vector\n");
@@ -706,6 +718,12 @@ int main(int argc, char *argv[])
 
     }
   }
+
+  AssertFatal(precod_nbr_layers <= min(n_tx, n_rx),
+              "Number of layers %d cannot be more than min(n_tx %d, n_rx %d)\n",
+              precod_nbr_layers,
+              n_tx,
+              n_rx);
 
   logInit();
   set_glog(loglvl);
@@ -877,7 +895,7 @@ int main(int argc, char *argv[])
   }
 
   const int num_samples_alloc = 153600;
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
   init_cuda_chsim_buffers(use_cuda,
                           n_tx,
                           n_rx,
@@ -894,7 +912,7 @@ int main(int argc, char *argv[])
   }
 #endif
 
-#if !defined(ENABLE_CUDA) || !use_cuda
+#if !defined(CHANNEL_SIM_CUDA) || !use_cuda
   printf("Pre-allocating padded host memory for the CPU channel pipeline...\n");
   const int max_padding_alloc = 256 - 1;
   size_t padded_tx_alloc_bytes = n_tx * (num_samples_alloc + max_padding_alloc) * 2 * sizeof(float);
@@ -992,7 +1010,6 @@ int main(int argc, char *argv[])
     num_dmrs_cdm_grps_no_data = dmrs_arg[3];
   }
 
-  uint8_t  length_dmrs = pusch_len1;
   uint16_t l_prime_mask = get_l_prime(nb_symb_sch, mapping_type, add_pos, length_dmrs, start_symbol, NR_MIB__dmrs_TypeA_Position_pos2);
   int number_dmrs_symbols = count_bits64_with_mask(l_prime_mask, start_symbol, nb_symb_sch);
   uint8_t  nb_re_dmrs = (dmrs_config_type == pusch_dmrs_type1) ? 6 : 4;
@@ -1174,6 +1191,11 @@ int main(int argc, char *argv[])
     reset_meas(&gNB->rx_pusch_stats);
     reset_meas(&gNB->rx_pusch_init_stats);
     reset_meas(&gNB->rx_pusch_symbol_processing_stats);
+    reset_meas(&gNB->pusch_extraction_stats);
+    reset_meas(&gNB->pusch_channel_compensation_stats);
+    reset_meas(&gNB->ulsch_llr_stats);
+    reset_meas(&gNB->ulsch_layer_demapping_stats);
+    reset_meas(&gNB->ulsch_unscrambling_stats);
     reset_meas(&gNB->ulsch_decoding_stats);
     reset_meas(&gNB->ts_deinterleave);
     reset_meas(&gNB->ts_rate_unmatch);
@@ -1304,7 +1326,7 @@ int main(int argc, char *argv[])
           srs_pdu->subcarrier_spacing = gNB->frame_parms.subcarrier_spacing;
           srs_pdu->num_ant_ports = n_tx == 4 ? 2 : n_tx == 2 ? 1 : 0;
           srs_pdu->sequence_id = 40;
-          srs_pdu->time_start_position = 0;
+          srs_pdu->time_start_position = gNB->frame_parms.symbols_per_slot - 1;
           srs_pdu->config_index = rrc_get_max_nr_csrs(srs_pdu->bwp_size, srs_pdu->bandwidth_index);
           srs_pdu->resource_type = NR_SRS_Resource__resourceType_PR_periodic;
           srs_pdu->t_srs = 1;
@@ -1400,7 +1422,7 @@ int main(int argc, char *argv[])
           srs_config_pdu->sequence_id = 40;
           srs_config_pdu->resource_type = NR_SRS_Resource__resourceType_PR_periodic;
           srs_config_pdu->t_srs = 1;
-          srs_config_pdu->time_start_position = 0;
+          srs_config_pdu->time_start_position = gNB->frame_parms.symbols_per_slot - 1;
         }
 
         for (int i = 0; i < (TBS / 8); i++)
@@ -1465,16 +1487,24 @@ int main(int argc, char *argv[])
             memcpy(data_start_ptr, s_interleaved[j], slot_length * 2 * sizeof(float));
           }
 
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
           if (use_cuda) {
 #if defined(USE_UNIFIED_MEMORY)
+#if defined(CUDA_VERSION) && CUDA_VERSION >= 13000
+            struct cudaMemLocation deviceId;
+            deviceId.type = cudaMemLocationTypeDevice;
+            cudaGetDevice(&deviceId.id);
+            const int padding_len = UE2gNB->channel_length - 1;
+            const int padded_slot_length = slot_length + padding_len;
+            cudaMemPrefetchAsync(d_tx_sig, n_tx * padded_slot_length * 2 * sizeof(float), deviceId, 0, 0);
+#else		  
             int deviceId;
             cudaGetDevice(&deviceId);
             const int padding_len = UE2gNB->channel_length - 1;
             const int padded_slot_length = slot_length + padding_len;
             cudaMemPrefetchAsync(d_tx_sig, n_tx * padded_slot_length * 2 * sizeof(float), deviceId, 0);
 #endif
-
+#endif
             start_meas(&pipeline_stats);
             random_channel(UE2gNB, 0);
             int num_links = UE2gNB->nb_tx * UE2gNB->nb_rx;
@@ -1834,9 +1864,22 @@ int main(int argc, char *argv[])
       printStatIndent3(&gNB->pusch_channel_estimation_antenna_processing_stats, "Antenna Processing time");
       printStatIndent2(&gNB->rx_pusch_init_stats, "RX PUSCH Initialization time");
       printStatIndent2(&gNB->rx_pusch_symbol_processing_stats, "RX PUSCH Symbol Processing time");
+      gNB->pusch_extraction_stats.trials = gNB->rx_pusch_symbol_processing_stats.trials;
+      printStatIndent3(&gNB->pusch_extraction_stats, "RX PUSCH extraction");
+      gNB->pusch_channel_compensation_stats.trials = gNB->rx_pusch_symbol_processing_stats.trials;
+      printStatIndent3(&gNB->pusch_channel_compensation_stats, "RX PUSCH channel compensation");
+      gNB->ulsch_llr_stats.trials = gNB->rx_pusch_symbol_processing_stats.trials;
+      printStatIndent3(&gNB->ulsch_llr_stats, "RX PUSCH LLR");
+      gNB->ulsch_layer_demapping_stats.trials = gNB->rx_pusch_symbol_processing_stats.trials;
+      printStatIndent3(&gNB->ulsch_layer_demapping_stats, "RX PUSCH layer demapping");
+      gNB->ulsch_unscrambling_stats.trials = gNB->rx_pusch_symbol_processing_stats.trials;
+      printStatIndent3(&gNB->ulsch_unscrambling_stats, "RX PUSCH unscrambling");
       printStatIndent(&gNB->ulsch_decoding_stats,"ULSCH total decoding time");
+      gNB->ts_deinterleave.trials = n_trials;
       printStatIndent2(&gNB->ts_deinterleave, "ULSCH segment deinterleaving time");
+      gNB->ts_rate_unmatch.trials = n_trials;
       printStatIndent2(&gNB->ts_rate_unmatch, "ULSCH segment rate matching time");
+      gNB->ts_ldpc_decode.trials = n_trials;
       printStatIndent2(&gNB->ts_ldpc_decode, "ULSCH segments decoding time");
       printStatIndent(&gNB->rx_srs_stats,"RX SRS time");
       printStatIndent2(&gNB->generate_srs_stats,"Generate SRS sequence time");
@@ -1905,7 +1948,7 @@ int main(int argc, char *argv[])
     fclose(uci_ulsch_matlab_vec);
 
   free_and_zero(UE->phy_sim_test_buf);
-#ifdef ENABLE_CUDA
+#ifdef CHANNEL_SIM_CUDA
   free_cuda_chsim_buffers(use_cuda,
                           &d_tx_sig,
                           &d_intermediate_sig,

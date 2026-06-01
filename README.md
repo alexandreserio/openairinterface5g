@@ -8,8 +8,9 @@
     <a href="https://gitlab.eurecom.fr/oai/openairinterface5g/-/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-CSSL--v1.0-blue" alt="License"></a>
     <a href="https://releases.ubuntu.com/22.04/"><img src="https://img.shields.io/badge/OS-Ubuntu22-Green" alt="Supported OS Ubuntu 22"></a>
     <a href="https://releases.ubuntu.com/24.04/"><img src="https://img.shields.io/badge/OS-Ubuntu24-Green" alt="Supported OS Ubuntu 24"></a>
+    <a href="https://releases.ubuntu.com/26.04/"><img src="https://img.shields.io/badge/OS-Ubuntu26-Green" alt="Supported OS Ubuntu 26"></a>
     <a href="https://www.redhat.com/en/technologies/linux-platforms/enterprise-linux"><img src="https://img.shields.io/badge/OS-RHEL9-Green" alt="Supported OS RHEL9"></a>
-    <a href="https://getfedora.org/en/workstation/"><img src="https://img.shields.io/badge/OS-Fedore41-Green" alt="Supported OS Fedora 43"></a>
+    <a href="https://getfedora.org/en/workstation/"><img src="https://img.shields.io/badge/OS-Fedore44-Green" alt="Supported OS Fedora 44"></a>
 </p>
 
 <p align="center">

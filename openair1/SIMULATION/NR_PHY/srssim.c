@@ -412,7 +412,7 @@ int main(int argc, char *argv[])
                                                              : 0,
                                 .num_symbols = nb_symb_srs,
                                 .num_repetitions = 0, // Value: 0 = 1, 1 = 2, 2 = 4
-                                .time_start_position = fp->symbols_per_slot - 1 - srs_start_symbol,
+                                .time_start_position = srs_start_symbol,
                                 .bandwidth_index = 0,
                                 .config_index = rrc_get_max_nr_csrs(srs_pdu.bwp_size, srs_pdu.bandwidth_index),
                                 .sequence_id = 40,

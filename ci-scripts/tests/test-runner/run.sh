@@ -9,21 +9,17 @@ rm -f ${file}
 cd ../../
 python3 main.py \
   --mode=InitiateHtml \
-  --ranRepository=https://gitlab.eurecom.fr/oai/openairinterface5g.git \
-  --ranBranch=${branch} \
-  --ranCommitID=${commit} \
-  --ranAllowMerge=true \
-  --ranTargetBranch=develop \
+  --repository=https://gitlab.eurecom.fr/oai/openairinterface5g.git \
+  --branch=${branch} \
   --XMLTestFile=tests/test-runner/test.xml
 
 python3 main.py \
   --mode=TesteNB \
-  --ranRepository=https://gitlab.eurecom.fr/oai/openairinterface5g.git \
-  --ranBranch=${branch} \
-  --ranCommitID=${commit} \
+  --repository=https://gitlab.eurecom.fr/oai/openairinterface5g.git \
+  --branch=${branch} \
   --ranAllowMerge=true \
-  --ranTargetBranch=develop \
-  --eNBSourceCodePath=NONE \
+  --targetBranch=develop \
+  --workspace=NONE \
   --XMLTestFile=tests/test-runner/test.xml
 
 python3 main.py \

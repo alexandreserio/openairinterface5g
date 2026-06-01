@@ -27,21 +27,26 @@ pipeline {
       steps {
         script {
           def missingParams = []
-          if (!params.SourceRepo?.trim())       { missingParams << 'SourceRepo' }
-          if (!params.eNB_Branch?.trim())       { missingParams << 'eNB_Branch' }
-          if (!params.eNB_CommitID?.trim())     { missingParams << 'eNB_CommitID' }
-          if (!params.eNB_TargetBranch?.trim()) { missingParams << 'eNB_TargetBranch' }
-          if (!params.eNB_Repository?.trim())   { missingParams << 'eNB_Repository' }
+          if (!params.sourceRepo?.trim())   { missingParams << 'sourceRepo' }
+          if (!params.sourceBranch?.trim())   { missingParams << 'sourceBranch' }
+          if (!params.sourceCommit?.trim()) { missingParams << 'sourceCommit' }
+          if (params.mergeWithTarget) {
+            if (!params.targetRepo?.trim())   { missingParams << 'targetRepo' }
+            if (!params.targetBranch?.trim()) { missingParams << 'targetBranch' }
+          }
 
           if (missingParams) {
             error "Missing required parameters: ${missingParams.join(', ')}"
           }
 
-          echo "Source Repo   : ${params.SourceRepo}"
-          echo "Source Branch : ${params.eNB_Branch}"
-          echo "Source Commit : ${params.eNB_CommitID}"
-          echo "Target Branch : ${params.eNB_TargetBranch}"
-          echo "Target Repo   : ${params.eNB_Repository}"
+          echo "Source Repo   : ${params.sourceRepo}"
+          echo "Source Branch : ${params.sourceBranch}"
+          echo "Source Commit : ${params.sourceCommit}"
+          echo "Merge         : ${params.mergeWithTarget}"
+          if (params.mergeWithTarget) {
+            echo "Target Branch : ${params.targetBranch}"
+            echo "Target Repo   : ${params.targetRepo}"
+          }
         }
       }
     }
@@ -51,6 +56,7 @@ pipeline {
           git config user.email "jenkins@openairinterface.org"
           git config user.name "OAI Jenkins"
           git remote remove source || true
+          git remote remove target || true
           git remote remove internal-repo || true
         """
       }
@@ -58,31 +64,38 @@ pipeline {
     stage('Add source repo & fetch branches') {
       steps {
         sh """
-          git remote add source ${params.SourceRepo} || true
-          git fetch source ${params.eNB_Branch}
-          git fetch origin ${params.eNB_TargetBranch}
+          git remote add source ${params.sourceRepo} || true
+          git fetch source ${params.sourceBranch}
         """
+        script {
+          if (params.mergeWithTarget) {
+            sh """
+              git remote add target ${params.targetRepo} || true
+              git fetch target ${params.targetBranch}
+            """
+          }
+        }
       }
     }
     stage('Create temporary branch for CI') {
       steps {
         script {
-          def shortCommit = params.eNB_CommitID.take(8)
-          env.NEW_BRANCH = "${params.eNB_Branch}-${shortCommit}"
+          env.NEW_BRANCH = "${params.sourceBranch}-${params.sourceCommit}"
           echo "New branch: ${env.NEW_BRANCH}"
         }
         sh """
           # Checkout source commit
-          git checkout -B ${env.NEW_BRANCH} ${params.eNB_CommitID}
+          git checkout -B ${env.NEW_BRANCH} ${params.sourceCommit}
         """
       }
     }
     stage('Merge target into source') {
+      when { expression { return params.mergeWithTarget } }
       steps {
         sh """
-          echo "Merging target branch ${params.eNB_TargetBranch} into source branch ${env.NEW_BRANCH}"
-          if ! git merge --ff origin/${params.eNB_TargetBranch} \
-            -m "Merge ${params.eNB_TargetBranch} into ${params.eNB_Branch} for CI"; then
+          echo "Merging target branch ${params.targetBranch} into source branch ${env.NEW_BRANCH}"
+          if ! git merge --ff target/${params.targetBranch} \
+            -m "Merge ${params.targetBranch} into ${params.sourceBranch} for CI"; then
             echo "Merge conflicts detected. Aborting."
             git merge --abort || true
             exit 1

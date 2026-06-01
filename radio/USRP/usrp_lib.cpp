@@ -1394,8 +1394,7 @@ extern "C" {
                                       openair0_cfg[0].tune_offset);
       s->usrp->set_tx_freq(tx_tune_req, i+choffset);
       s->usrp->set_tx_gain(openair0_cfg[0].tx_gain[i],i+choffset); // [GONÇALO]
-      //LOG_I(HW,"USRP TX_GAIN:%3.2lf gain_range:%3.2lf tx_gain:%3.2lf\n", gain_range_tx.stop()-openair0_cfg[0].tx_gain[i], gain_range_tx.stop(), openair0_cfg[0].tx_gain[i]);
-      LOG_I(HW,"USRP TX_GAIN:%3.2lf gain_range:%3.2lf tx_gain:%3.2lf\n", openair0_cfg[0].tx_gain[i], gain_range_tx.stop(), openair0_cfg[0].tx_gain[i]);
+      LOG_I(HW,"USRP TX_GAIN:%3.2lf gain_range:%3.2lf tx_gain:%3.2lf\n", gain_range_tx.stop()-openair0_cfg[0].tx_gain[i], gain_range_tx.stop(), openair0_cfg[0].tx_gain[i]);
     }
   }
 

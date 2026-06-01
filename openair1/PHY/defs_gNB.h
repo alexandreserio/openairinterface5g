@@ -128,25 +128,21 @@ typedef struct {
   uint8_t round;
   bool new_rx;
   /////////////////////// ulsch decoding ///////////////////////
-  /// flag used to clear d properly (together with d_to_be_cleared below)
+  /// flag used to clear d properly
   /// set to true in nr_fill_ulsch() when new_data_indicator is received
   bool harq_to_be_cleared;
   /// Pointer to the payload (38.212 V15.4.0 section 5.1)
   uint8_t *b;
-  /// Pointers to code blocks after code block segmentation and CRC attachment (38.212 V15.4.0 section 5.2.2)
-  uint8_t **c;
+  /// Pointer to aggregated code blocks after code block segmentation and CRC attachment (38.212 V15.4.0 section 5.2.2)
+  uint8_t *c;
   /// Number of bits in each code block (38.212 V15.4.0 section 5.2.2)
   uint32_t K;
   /// Number of "Filler" bits added in the code block segmentation (38.212 V15.4.0 section 5.2.2)
   uint32_t F;
   /// Number of code blocks after code block segmentation (38.212 V15.4.0 section 5.2.2)
   uint32_t C;
-  /// Pointers to code blocks after LDPC coding (38.212 V15.4.0 section 5.3.2)
-  int16_t **d;
-  /// flag used to clear d properly (together with harq_to_be_cleared above)
-  /// set to true in nr_ulsch_decoding() when harq_to_be_cleared is true
-  /// when true, clear d in the next call to function nr_rate_matching_ldpc_rx()
-  bool *d_to_be_cleared;
+  /// Pointers to aggregated code blocks after LDPC coding (38.212 V15.4.0 section 5.3.2)
+  int16_t *d;
   /// LDPC lifting size (38.212 V15.4.0 table 5.3.2-1)
   uint32_t Z;
   /// Number of bits in each code block after rate matching for LDPC code (38.212 V15.4.0 section 5.4.2.1)
@@ -361,7 +357,6 @@ typedef struct PHY_VARS_gNB_s {
   /// Ethernet parameters for fronthaul interface
   eth_params_t eth_params;
   int rx_total_gain_dB;
-  int (*nr_start_if)(struct RU_t_s *ru, struct PHY_VARS_gNB_s *gNB);
   nfapi_nr_config_request_scf_t gNB_config;
   NR_DL_FRAME_PARMS frame_parms;
   PHY_MEASUREMENTS_gNB measurements;
@@ -445,10 +440,12 @@ typedef struct PHY_VARS_gNB_s {
   time_stats_t dlsch_resource_mapping_stats;
   time_stats_t dlsch_precoding_stats;
   time_stats_t tinput;
+  time_stats_t tinput_memcpy;
   time_stats_t tprep;
   time_stats_t tparity;
   time_stats_t toutput;
-  
+  time_stats_t tconcat;
+
   time_stats_t dlsch_rate_matching_stats;
   time_stats_t dlsch_interleaving_stats;
   time_stats_t dlsch_segmentation_stats;
@@ -463,11 +460,16 @@ typedef struct PHY_VARS_gNB_s {
   time_stats_t ulsch_decoding_stats;
   time_stats_t ts_deinterleave;
   time_stats_t ts_rate_unmatch;
+  time_stats_t ts_seg_prep;
   time_stats_t ts_ldpc_decode;
   time_stats_t ulsch_deinterleaving_stats;
   time_stats_t ulsch_channel_estimation_stats;
   time_stats_t pusch_channel_estimation_antenna_processing_stats;
   time_stats_t ulsch_llr_stats;
+  time_stats_t ulsch_layer_demapping_stats;
+  time_stats_t ulsch_unscrambling_stats;
+  time_stats_t pusch_extraction_stats;
+  time_stats_t pusch_channel_compensation_stats;
   time_stats_t rx_srs_stats;
   time_stats_t generate_srs_stats;
   time_stats_t get_srs_signal_stats;
@@ -518,7 +520,7 @@ typedef struct LDPCDecode_s {
   NR_UL_gNB_HARQ_t *ulsch_harq;
   t_nrLDPC_dec_params decoderParms;
   NR_gNB_ULSCH_t *ulsch;
-  short* ulsch_llr; 
+  int16_t *ulsch_llr;
   int ulsch_id;
   int harq_pid;
   int rv_index;

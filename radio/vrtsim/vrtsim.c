@@ -347,7 +347,7 @@ static void parse_ue_config(vrtsim_state_t *vrtsim_state)
       AssertFatal(rx_ant > 0 && rx_ant <= MAX_NUM_ANTENNAS_TX,
                   "Invalid RX antenna count %d for UE %d\n", rx_ant, i);
       vrtsim_state->ue_conf[i].tx_ant = tx_ant;
-      vrtsim_state->ue_conf[i].rx_ant = rx_ant;
+      vrtsim_state->ue_conf[i].rx_ant = rx_ant;       
     } else {
       vrtsim_state->ue_conf[i].tx_ant = 1;
       vrtsim_state->ue_conf[i].rx_ant = 1;
@@ -365,11 +365,11 @@ static void parse_ue_config(vrtsim_state_t *vrtsim_state)
     vrtsim_state->ue_conf[i].cir_conf.speed_mps = speed_mps;
     vrtsim_state->ue_conf[i].cir_conf.aoa_deg   = aoa_deg;
 
-    LOG_I(HW, "VRTSIM: UE %d - %dx%d antennas, Model %d (TDL-%c), DS %.1fns, Speed %.1fm/s, AoA %.1fdeg\n",
-          i,
-          vrtsim_state->ue_conf[i].tx_ant,
-          vrtsim_state->ue_conf[i].rx_ant,
-          model_id, 'A' + model_id, ds_ns, speed_mps, aoa_deg);
+    LOG_I(HW, "VRTSIM: UE %d configuration: UE_tx=%d UE_rx=%d, Model %d (TDL-%c), DS %.1fns, Speed %.1fm/s, AoA %.1fdeg\n",
+      i,
+      vrtsim_state->ue_conf[i].tx_ant,
+      vrtsim_state->ue_conf[i].rx_ant,
+      model_id, 'A' + model_id, ds_ns, speed_mps, aoa_deg);
   }
 }
 
@@ -551,9 +551,12 @@ static int vrtsim_connect(openair0_device_t *device)
                       u, cd->nb_tx, device->openair0_cfg[0].tx_num_channels);
           LOG_I(HW, "VRTSIM: UE %d channel_desc=%p ch_ps=%p ch=%p nb_tx=%d nb_rx=%d\n",
                 u, cd, cd->ch_ps, cd->ch, cd->nb_tx, cd->nb_rx);
-          LOG_I(HW, "VRTSIM: UE %d CIRDB - Model %d (TDL-%c), antennas %dx%d, nb_rx=%d\n",
-                u, ue_sel.want_model_id, 'A' + ue_sel.want_model_id,
-                device->openair0_cfg[0].tx_num_channels, vrtsim_state->ue_conf[u].rx_ant, cd->nb_rx);
+          LOG_I(HW, "VRTSIM: UE %d channel model configuration: channel model antenna dimension %dx%d (RU_tx x UE_rx), Model %d (TDL-%c), DS %.1fns, Speed %.1fm/s, AoA %.1fdeg\n",
+                u,
+                device->openair0_cfg[0].tx_num_channels,
+                vrtsim_state->ue_conf[u].rx_ant,
+                ue_sel.want_model_id, 'A' + ue_sel.want_model_id,
+                ue_sel.want_ds_ns, ue_sel.want_speed_mps, ue_sel.want_aoa_deg);  
         }
         LOG_A(HW, "VRTSIM: Multi-UE channel taps via CIR DB\n");
       } else {
@@ -678,7 +681,7 @@ static int vrtsim_write_with_chanmod(vrtsim_state_t *vrtsim_state,
     }
     size_t saved_samples_input_len = channel_length - 1;
 
-  #ifdef CUDA_ENABLE
+  #ifdef CHANNEL_SIM_CUDA
     cuda_channel_pipeline(vrtsim_state->channel_pipeline_context,
                           (const cf_t **)channel_impulse_response_p,
                           (const c16_t **)saved_samples_ptr,
@@ -885,7 +888,7 @@ static void vrtsim_end(openair0_device_t *device)
 
   tx_timing_t *tx_timing = &vrtsim_state->tx_timing;
   if (vrtsim_state->chanmod || vrtsim_state->taps_socket || vrtsim_state->use_cirdb) {
-#ifdef CUDA_ENABLE
+#ifdef CHANNEL_SIM_CUDA
     cuda_channel_pipeline_shutdown(vrtsim_state->channel_pipeline_context);
 #else
     abortTpool(&vrtsim_state->tpool);
@@ -988,7 +991,7 @@ __attribute__((__visibility__("default"))) int device_init(openair0_device_t *de
     int noise_power_dBFS = get_noise_power_dBFS();
     int16_t noise_power = noise_power_dBFS == INVALID_DBFS_VALUE ? 0 : (int16_t)(32767.0 / powf(10.0, .05 * -noise_power_dBFS));
     LOG_A(HW, "VRTSIM: Noise power %d sample value\n", noise_power);
-#ifdef CUDA_ENABLE
+#ifdef CHANNEL_SIM_CUDA
     size_t samples_in_one_ms = openair0_cfg->sample_rate / 1000 / 1000;
     vrtsim_state->channel_pipeline_context = cuda_channel_pipeline_init(openair0_cfg->tx_num_channels * samples_in_one_ms);
 #else

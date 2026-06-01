@@ -202,7 +202,7 @@ static int get_pucch2_size(const int num_ant_ports)
 {
   // TODO the logic to set the number of PRBs needs to be improved
   //      it should involve the code rate parameter and the max number of bits to be transmitted
-  return (num_ant_ports <= 4 ? 8 : 16);
+  return (num_ant_ports <= 4 ? 8 : 12);
 }
 
 static int get_nb_pucch2_per_slot(const NR_ServingCellConfigCommon_t *scc, int bwp_size, const nr_pdsch_AntennaPorts_t *ap)
@@ -416,6 +416,83 @@ static void set_csirs_periodicity(NR_NZP_CSI_RS_Resource_t *nzpcsi0,
   }
 }
 
+static NR_NZP_CSI_RS_Resource_t *get_nzp_csi_rs_resource(int id, int num_dl_antenna_ports, int curr_bwp, long scramblingID)
+{
+  NR_NZP_CSI_RS_Resource_t *nzpcsi = calloc(1, sizeof(*nzpcsi));
+  nzpcsi->nzp_CSI_RS_ResourceId = id;
+
+  NR_CSI_RS_ResourceMapping_t resourceMapping = {0};
+  switch (num_dl_antenna_ports) {
+    case 1:
+      resourceMapping.frequencyDomainAllocation.present = NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_row2;
+      resourceMapping.frequencyDomainAllocation.choice.row2.buf = calloc(2, sizeof(uint8_t));
+      resourceMapping.frequencyDomainAllocation.choice.row2.size = 2;
+      resourceMapping.frequencyDomainAllocation.choice.row2.bits_unused = 4;
+      resourceMapping.frequencyDomainAllocation.choice.row2.buf[0] = 0;
+      resourceMapping.frequencyDomainAllocation.choice.row2.buf[1] = 16;
+      resourceMapping.nrofPorts = NR_CSI_RS_ResourceMapping__nrofPorts_p1;
+      resourceMapping.cdm_Type = NR_CSI_RS_ResourceMapping__cdm_Type_noCDM;
+      break;
+    case 2:
+      resourceMapping.frequencyDomainAllocation.present = NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_other;
+      resourceMapping.frequencyDomainAllocation.choice.other.buf = calloc(1, sizeof(uint8_t));
+      resourceMapping.frequencyDomainAllocation.choice.other.size = 1;
+      resourceMapping.frequencyDomainAllocation.choice.other.bits_unused = 2;
+      resourceMapping.frequencyDomainAllocation.choice.other.buf[0] = 4;
+      resourceMapping.nrofPorts = NR_CSI_RS_ResourceMapping__nrofPorts_p2;
+      resourceMapping.cdm_Type = NR_CSI_RS_ResourceMapping__cdm_Type_fd_CDM2;
+      break;
+    case 4:
+      resourceMapping.frequencyDomainAllocation.present = NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_row4;
+      resourceMapping.frequencyDomainAllocation.choice.row4.buf = calloc(1, sizeof(uint8_t));
+      resourceMapping.frequencyDomainAllocation.choice.row4.size = 1;
+      resourceMapping.frequencyDomainAllocation.choice.row4.bits_unused = 5;
+      resourceMapping.frequencyDomainAllocation.choice.row4.buf[0] = 32;
+      resourceMapping.nrofPorts = NR_CSI_RS_ResourceMapping__nrofPorts_p4;
+      resourceMapping.cdm_Type = NR_CSI_RS_ResourceMapping__cdm_Type_fd_CDM2;
+      break;
+    case 8:
+      resourceMapping.frequencyDomainAllocation.present = NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_other;
+      resourceMapping.frequencyDomainAllocation.choice.other.buf = calloc(1, sizeof(uint8_t));
+      resourceMapping.frequencyDomainAllocation.choice.other.size = 1;
+      resourceMapping.frequencyDomainAllocation.choice.other.bits_unused = 2;
+      resourceMapping.frequencyDomainAllocation.choice.other.buf[0] = 60;
+      resourceMapping.nrofPorts = NR_CSI_RS_ResourceMapping__nrofPorts_p8;
+      resourceMapping.cdm_Type = NR_CSI_RS_ResourceMapping__cdm_Type_fd_CDM2;
+      break;
+    case 12:
+      resourceMapping.frequencyDomainAllocation.present = NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_other;
+      resourceMapping.frequencyDomainAllocation.choice.other.buf = calloc(1, sizeof(uint8_t));
+      resourceMapping.frequencyDomainAllocation.choice.other.size = 1;
+      resourceMapping.frequencyDomainAllocation.choice.other.bits_unused = 2;
+      resourceMapping.frequencyDomainAllocation.choice.other.buf[0] = 252;
+      resourceMapping.nrofPorts = NR_CSI_RS_ResourceMapping__nrofPorts_p12;
+      resourceMapping.cdm_Type = NR_CSI_RS_ResourceMapping__cdm_Type_fd_CDM2;
+      break;
+    default:
+      AssertFatal(false, "Number of ports not yet supported\n");
+  }
+  resourceMapping.firstOFDMSymbolInTimeDomain = 13; // last symbol of slot
+  resourceMapping.firstOFDMSymbolInTimeDomain2 = NULL;
+  resourceMapping.density.present = NR_CSI_RS_ResourceMapping__density_PR_one;
+  resourceMapping.density.choice.one = (NULL_t)0;
+  resourceMapping.freqBand.startingRB = 0;
+  resourceMapping.freqBand.nrofRBs = ((curr_bwp >> 2) + (curr_bwp % 4 > 0)) << 2;
+
+  nzpcsi->resourceMapping = resourceMapping;
+  nzpcsi->powerControlOffset = 0;
+  nzpcsi->powerControlOffsetSS = calloc(1, sizeof(*nzpcsi->powerControlOffsetSS));
+  *nzpcsi->powerControlOffsetSS = NR_NZP_CSI_RS_Resource__powerControlOffsetSS_db0;
+  nzpcsi->scramblingID = scramblingID;
+  const int ideal_period = set_ideal_period(true); // same periodicity as CSI measurement report
+  const frame_structure_t *fs = &(RC.nrmac[0]->frame_structure);
+  set_csirs_periodicity(nzpcsi, id, ideal_period, fs);
+  nzpcsi->qcl_InfoPeriodicCSI_RS = calloc(1, sizeof(*nzpcsi->qcl_InfoPeriodicCSI_RS));
+  *nzpcsi->qcl_InfoPeriodicCSI_RS = 0;
+
+  return nzpcsi;
+}
+
 static void config_csirs(const NR_ServingCellConfigCommon_t *servingcellconfigcommon,
                          NR_CSI_MeasConfig_t *csi_MeasConfig,
                          int num_dl_antenna_ports,
@@ -424,96 +501,32 @@ static void config_csirs(const NR_ServingCellConfigCommon_t *servingcellconfigco
                          int id)
 {
   if (do_csirs) {
-
-    if(!csi_MeasConfig->nzp_CSI_RS_ResourceSetToAddModList)
-      csi_MeasConfig->nzp_CSI_RS_ResourceSetToAddModList  = calloc(1,sizeof(*csi_MeasConfig->nzp_CSI_RS_ResourceSetToAddModList));
-    NR_NZP_CSI_RS_ResourceSet_t *nzpcsirs0 = calloc(1,sizeof(*nzpcsirs0));
+    // Add NZP CSI-RS resource Set: one or more NZP-CSI-RS-Resources plus set-level attributes
+    // A CSI-ReportConfig or CSI-ResourceConfig points to a set (not to individual resources)
+    if (!csi_MeasConfig->nzp_CSI_RS_ResourceSetToAddModList)
+      csi_MeasConfig->nzp_CSI_RS_ResourceSetToAddModList = calloc(1, sizeof(*csi_MeasConfig->nzp_CSI_RS_ResourceSetToAddModList));
+    NR_NZP_CSI_RS_ResourceSet_t *nzpcsirs0 = calloc(1, sizeof(*nzpcsirs0));
     nzpcsirs0->nzp_CSI_ResourceSetId = id;
-    NR_NZP_CSI_RS_ResourceId_t *nzpid0 = calloc(1,sizeof(*nzpid0));
-    *nzpid0 = id;
-    asn1cSeqAdd(&nzpcsirs0->nzp_CSI_RS_Resources,nzpid0);
     nzpcsirs0->repetition = NULL;
     nzpcsirs0->aperiodicTriggeringOffset = NULL;
     nzpcsirs0->trs_Info = NULL;
-    asn1cSeqAdd(&csi_MeasConfig->nzp_CSI_RS_ResourceSetToAddModList->list,nzpcsirs0);
-    if(!csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList)
-      csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList = calloc(1,sizeof(*csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList));
-    NR_NZP_CSI_RS_Resource_t *nzpcsi0 = calloc(1,sizeof(*nzpcsi0));
-    nzpcsi0->nzp_CSI_RS_ResourceId = id;
-    NR_CSI_RS_ResourceMapping_t resourceMapping = {0};
-    switch (num_dl_antenna_ports) {
-      case 1:
-        resourceMapping.frequencyDomainAllocation.present = NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_row2;
-        resourceMapping.frequencyDomainAllocation.choice.row2.buf = calloc(2, sizeof(uint8_t));
-        resourceMapping.frequencyDomainAllocation.choice.row2.size = 2;
-        resourceMapping.frequencyDomainAllocation.choice.row2.bits_unused = 4;
-        resourceMapping.frequencyDomainAllocation.choice.row2.buf[0] = 0;
-        resourceMapping.frequencyDomainAllocation.choice.row2.buf[1] = 16;
-        resourceMapping.nrofPorts = NR_CSI_RS_ResourceMapping__nrofPorts_p1;
-        resourceMapping.cdm_Type = NR_CSI_RS_ResourceMapping__cdm_Type_noCDM;
-        break;
-      case 2:
-        resourceMapping.frequencyDomainAllocation.present = NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_other;
-        resourceMapping.frequencyDomainAllocation.choice.other.buf = calloc(1, sizeof(uint8_t));
-        resourceMapping.frequencyDomainAllocation.choice.other.size = 1;
-        resourceMapping.frequencyDomainAllocation.choice.other.bits_unused = 2;
-        resourceMapping.frequencyDomainAllocation.choice.other.buf[0] = 4;
-        resourceMapping.nrofPorts = NR_CSI_RS_ResourceMapping__nrofPorts_p2;
-        resourceMapping.cdm_Type = NR_CSI_RS_ResourceMapping__cdm_Type_fd_CDM2;
-        break;
-      case 4:
-        resourceMapping.frequencyDomainAllocation.present = NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_row4;
-        resourceMapping.frequencyDomainAllocation.choice.row4.buf = calloc(1, sizeof(uint8_t));
-        resourceMapping.frequencyDomainAllocation.choice.row4.size = 1;
-        resourceMapping.frequencyDomainAllocation.choice.row4.bits_unused = 5;
-        resourceMapping.frequencyDomainAllocation.choice.row4.buf[0] = 32;
-        resourceMapping.nrofPorts = NR_CSI_RS_ResourceMapping__nrofPorts_p4;
-        resourceMapping.cdm_Type = NR_CSI_RS_ResourceMapping__cdm_Type_fd_CDM2;
-        break;
-      case 8:
-        resourceMapping.frequencyDomainAllocation.present = NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_other;
-        resourceMapping.frequencyDomainAllocation.choice.other.buf = calloc(1, sizeof(uint8_t));
-        resourceMapping.frequencyDomainAllocation.choice.other.size = 1;
-        resourceMapping.frequencyDomainAllocation.choice.other.bits_unused = 2;
-        resourceMapping.frequencyDomainAllocation.choice.other.buf[0] = 60;
-        resourceMapping.nrofPorts = NR_CSI_RS_ResourceMapping__nrofPorts_p8;
-        resourceMapping.cdm_Type = NR_CSI_RS_ResourceMapping__cdm_Type_fd_CDM2;
-        break;
-      case 12:
-        resourceMapping.frequencyDomainAllocation.present = NR_CSI_RS_ResourceMapping__frequencyDomainAllocation_PR_other;
-        resourceMapping.frequencyDomainAllocation.choice.other.buf = calloc(1, sizeof(uint8_t));
-        resourceMapping.frequencyDomainAllocation.choice.other.size = 1;
-        resourceMapping.frequencyDomainAllocation.choice.other.bits_unused = 2;
-        resourceMapping.frequencyDomainAllocation.choice.other.buf[0] = 252;
-        resourceMapping.nrofPorts = NR_CSI_RS_ResourceMapping__nrofPorts_p12;
-        resourceMapping.cdm_Type = NR_CSI_RS_ResourceMapping__cdm_Type_fd_CDM2;
-        break;
-      default:
-        AssertFatal(false, "Number of ports not yet supported\n");
-    }
-    resourceMapping.firstOFDMSymbolInTimeDomain = 13;  // last symbol of slot
-    resourceMapping.firstOFDMSymbolInTimeDomain2 = NULL;
-    resourceMapping.density.present = NR_CSI_RS_ResourceMapping__density_PR_one;
-    resourceMapping.density.choice.one = (NULL_t)0;
-    resourceMapping.freqBand.startingRB = 0;
-    resourceMapping.freqBand.nrofRBs = ((curr_bwp >> 2) + (curr_bwp % 4 > 0)) << 2;
-    nzpcsi0->resourceMapping = resourceMapping;
-    nzpcsi0->powerControlOffset = 0;
-    nzpcsi0->powerControlOffsetSS = calloc(1,sizeof(*nzpcsi0->powerControlOffsetSS));
-    *nzpcsi0->powerControlOffsetSS = NR_NZP_CSI_RS_Resource__powerControlOffsetSS_db0;
-    nzpcsi0->scramblingID = *servingcellconfigcommon->physCellId;
+    asn1cSeqAdd(&csi_MeasConfig->nzp_CSI_RS_ResourceSetToAddModList->list, nzpcsirs0);
 
-    const int ideal_period = set_ideal_period(true); // same periodicity as CSI measurement report
-    const frame_structure_t *fs = &(RC.nrmac[0]->frame_structure);
-    set_csirs_periodicity(nzpcsi0, id, ideal_period, fs);
+    // Add NZP CSI-RS Resources: Time/frequency mapping
+    if (!csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList)
+      csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList = calloc(1, sizeof(*csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList));
+    NR_NZP_CSI_RS_Resource_t *nzpcsi0 =
+        get_nzp_csi_rs_resource(id, num_dl_antenna_ports, curr_bwp, *servingcellconfigcommon->physCellId);
+    asn1cSeqAdd(&csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList->list, nzpcsi0);
 
-    nzpcsi0->qcl_InfoPeriodicCSI_RS = calloc(1,sizeof(*nzpcsi0->qcl_InfoPeriodicCSI_RS));
-    *nzpcsi0->qcl_InfoPeriodicCSI_RS = 0;
-    asn1cSeqAdd(&csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList->list,nzpcsi0);
-  }
-  else {
+    // Add NZP CSI-RS Resource ID: identifier used to reference one NZP-CSI-RS-Resource
+    NR_NZP_CSI_RS_ResourceId_t *nzpid0 = calloc(1, sizeof(*nzpid0));
+    *nzpid0 = id;
+    asn1cSeqAdd(&nzpcsirs0->nzp_CSI_RS_Resources, nzpid0);
+
+  } else {
     csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList = NULL;
-    csi_MeasConfig->nzp_CSI_RS_ResourceSetToAddModList  = NULL;
+    csi_MeasConfig->nzp_CSI_RS_ResourceSetToAddModList = NULL;
   }
   csi_MeasConfig->nzp_CSI_RS_ResourceSetToReleaseList = NULL;
   csi_MeasConfig->nzp_CSI_RS_ResourceToReleaseList = NULL;
@@ -3355,7 +3368,6 @@ static NR_BWP_UplinkDedicated_t *configure_initial_ul_bwp(const NR_ServingCellCo
 }
 
 static NR_BWP_DownlinkDedicated_t *configure_initial_dl_bwp(const NR_ServingCellConfigCommon_t *scc,
-                                                            const int pdsch_AntennaPorts,
                                                             uint64_t bitmap,
                                                             const NR_UE_NR_Capability_t *uecap,
                                                             const nr_mac_config_t *configuration)
@@ -3525,8 +3537,6 @@ static NR_SpCellConfig_t *get_initial_SpCellConfig(int uid,
                                                    const nr_mac_config_t *configuration,
                                                    int ssb_index)
 {
-  const int pdsch_AntennaPorts =
-      configuration->pdsch_AntennaPorts.N1 * configuration->pdsch_AntennaPorts.N2 * configuration->pdsch_AntennaPorts.XP;
   NR_SpCellConfig_t *SpCellConfig = calloc(1, sizeof(*SpCellConfig));
   SpCellConfig->servCellIndex = NULL;
   SpCellConfig->reconfigurationWithSync = NULL;
@@ -3564,7 +3574,7 @@ static NR_SpCellConfig_t *get_initial_SpCellConfig(int uid,
   asn1cCallocOne(uplinkConfig->firstActiveUplinkBWP_Id, first_active_bwp);
   if (first_active_bwp == 0) {
     uplinkConfig->initialUplinkBWP = configure_initial_ul_bwp(scc, configuration, maxMIMO_Layers, NULL, uid);
-    configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, pdsch_AntennaPorts, bitmap, NULL, configuration);
+    configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, bitmap, NULL, configuration);
   } else {
     configDedicated->downlinkBWP_ToAddModList = calloc(1, sizeof(*configDedicated->downlinkBWP_ToAddModList));
     NR_BWP_Downlink_t *bwp = config_downlinkBWP(scc, NULL, false, true, configuration);
@@ -3812,8 +3822,6 @@ NR_CellGroupConfig_t *update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_t
   long ul_maxMIMO_Layers = set_ul_max_layers(configuration, uecap);
   local_config.first_active_bwp = new_bwp;
   uint64_t bitmap = get_ssb_bitmap(scc);
-  const int pdsch_AntennaPorts =
-    configuration->pdsch_AntennaPorts.N1 * configuration->pdsch_AntennaPorts.N2 * configuration->pdsch_AntennaPorts.XP;
   // add new BWP
   if (new_bwp == 0) {
     if (!configDedicated->initialDownlinkBWP)
@@ -3821,7 +3829,7 @@ NR_CellGroupConfig_t *update_cellGroupConfig_for_BWP_switch(NR_CellGroupConfig_t
     if (!uplinkConfig->initialUplinkBWP)
       uplinkConfig->initialUplinkBWP = calloc_or_fail(1, sizeof(*uplinkConfig->initialUplinkBWP));
     uplinkConfig->initialUplinkBWP = configure_initial_ul_bwp(scc, &local_config, ul_maxMIMO_Layers, uecap, uid);
-    configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, pdsch_AntennaPorts, bitmap, uecap, &local_config);
+    configDedicated->initialDownlinkBWP = configure_initial_dl_bwp(scc, bitmap, uecap, &local_config);
   } else {
     if (!configDedicated->downlinkBWP_ToAddModList)
       configDedicated->downlinkBWP_ToAddModList = calloc_or_fail(1, sizeof(*configDedicated->downlinkBWP_ToAddModList));

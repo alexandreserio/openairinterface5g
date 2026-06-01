@@ -186,11 +186,6 @@ static void set_fp_options(int cell_id, int ru_id)
   LOG_I(PHY, "Set UE nb_rx_antenna %d, nb_tx_antenna %d, threequarter_fs %d, ofdm_offset_divisor %d\n", fp->nb_antennas_rx, fp->nb_antennas_tx, fp->threequarter_fs, fp->ofdm_offset_divisor);
 }
 
-// Stupid function addition because UE itti messages queues definition is common with eNB
-void *rrc_enb_process_msg(void *notUsed) {
-  return NULL;
-}
-
 static bool stop_immediately = false;
 static void trigger_stop(int sig)
 {
@@ -264,7 +259,7 @@ int main(int argc, char **argv)
 
   init_opt();
 
-  int ret_loader = load_nrLDPC_coding_interface(NULL, &nrLDPC_coding_interface);
+  int ret_loader = load_nrLDPC_coding_interface(NULL, &nrLDPC_coding_interface, 32);
   AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
   // strdup to put the sring in the core file for post mortem identification

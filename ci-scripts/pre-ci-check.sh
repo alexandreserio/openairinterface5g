@@ -58,18 +58,20 @@ done
 # Merged commits
 # ----------------------------
 mergeCommits=$(git rev-list --merges --abbrev-commit "$TARGET_BRANCH".."$SOURCE_BRANCH")
-if [[ -n "$mergeCommits" ]]; then
-    message="> ERROR: Following merge commits are found in the source branch history. Please rebase your branch.\n>\n"
-    message+="> $(echo "$mergeCommits" | paste -sd ',' -)\n"
-    echo -e "$message"
-    exit 3
+if [[ ! "$SOURCE_BRANCH" =~ ^(origin/)?integration_[0-9]{4}_w[0-9]{2}$ ]]; then
+    if [[ -n "$mergeCommits" ]]; then
+        message="> ERROR: Following merge commits are found in the source branch history. Please rebase your branch.\n>\n"
+        message+="> $(echo "$mergeCommits" | paste -sd ',' -)\n"
+        echo -e "$message"
+        exit 3
+    fi
 fi
 
 # ----------------------------
 # Check unsigned commits
 # ----------------------------
 unsignedCommits=$(
-    for c in $(git rev-list "$TARGET_BRANCH".."$SOURCE_BRANCH"); do
+    for c in $(git rev-list "$TARGET_BRANCH".."$SOURCE_BRANCH" --no-merges); do
         if ! git log -1 --format=%B "$c" | grep -q "Signed-off-by:"; then
             git log -1 --format='%h' "$c"
         fi

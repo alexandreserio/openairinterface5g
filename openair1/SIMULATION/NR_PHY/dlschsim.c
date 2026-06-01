@@ -403,8 +403,8 @@ int main(int argc, char **argv)
 	//init_nr_ue_transport(UE, 0);
   UE->nrLDPC_coding_interface = gNB->nrLDPC_coding_interface;
 
-  NR_UE_DLSCH_t dlsch_ue[NR_MAX_NB_LAYERS > 4? 2:1] = {0};
-  int num_codeword = NR_MAX_NB_LAYERS > 4? 2:1;
+  NR_UE_DLSCH_t dlsch_ue[NR_MAX_NB_LAYERS > 4 ? 2 : 1] = {0};
+  int num_codeword = NR_MAX_NB_LAYERS > 4 ? 2 : 1;
   nr_ue_dlsch_init(dlsch_ue, num_codeword, 5);
   for (int i=0; i < num_codeword; i++)
     dlsch_ue[0].rnti = n_rnti;
@@ -457,20 +457,22 @@ int main(int argc, char **argv)
 	NR_UE_DLSCH_t *dlsch0_ue = &dlsch_ue[0];
   NR_DL_UE_HARQ_t *harq_process = &UE->dl_harq_processes[0][harq_pid];
   harq_process->first_rx = 1;
-	dlsch0_ue->dlsch_config.mcs = Imcs;
-	dlsch0_ue->dlsch_config.mcs_table = mcs_table;
-	dlsch0_ue->Nl = Nl;
-	dlsch0_ue->dlsch_config.number_rbs = nb_rb;
-	dlsch0_ue->dlsch_config.qamModOrder = mod_order;
-	dlsch0_ue->dlsch_config.rv = rvidx;
-	dlsch0_ue->dlsch_config.targetCodeRate = rate;
-  dlsch0_ue->dlsch_config.TBS = TBS;
-  dlsch0_ue->dlsch_config.ldpcBaseGraph = get_BG(TBS, rate);
-	dlsch0_ue->dlsch_config.dmrsConfigType = NFAPI_NR_DMRS_TYPE1;
-	dlsch0_ue->dlsch_config.dlDmrsSymbPos = 4;
-	dlsch0_ue->dlsch_config.n_dmrs_cdm_groups = 1;
-  dlsch0_ue->dlsch_config.tbslbrm = Tbslbrm;
-	printf("harq process ue mcs = %d Qm = %d, symb %d\n", dlsch0_ue->dlsch_config.mcs, dlsch0_ue->dlsch_config.qamModOrder, nb_symb_sch);
+  fapi_nr_dl_config_dlsch_pdu_rel15_t dlsch_config;
+  dlsch_config.cw_info[0].mcs = Imcs;
+  dlsch_config.mcs_table = mcs_table;
+  dlsch_config.number_rbs = nb_rb;
+  dlsch_config.cw_info[0].Nl = Nl;
+  dlsch_config.cw_info[0].qamModOrder = mod_order;
+  dlsch_config.cw_info[0].rv = rvidx;
+  dlsch_config.cw_info[0].targetCodeRate = rate;
+  dlsch_config.cw_info[0].TBS = TBS;
+  dlsch_config.cw_info[0].ldpcBaseGraph = get_BG(TBS, rate);
+  dlsch_config.dmrsConfigType = NFAPI_NR_DMRS_TYPE1;
+  dlsch_config.dlDmrsSymbPos = 4;
+  dlsch_config.n_dmrs_cdm_groups = 1;
+  dlsch_config.tbslbrm = Tbslbrm;
+  dlsch0_ue->cw_info = dlsch_config.cw_info[0];
+  printf("harq process ue mcs = %d Qm = %d, symb %d\n", dlsch_config.cw_info[0].mcs, dlsch_config.cw_info[0].qamModOrder, nb_symb_sch);
 
   uint8_t test_input[TBS / 8 + 4]; // + 3 for CRC + 1 additional byte, see nr_dlsch_encoding()
   dlsch->pdu = test_input;
@@ -487,10 +489,10 @@ int main(int argc, char **argv)
 
 	//printf("crc32: [0]->0x%08x\n",crc24c(test_input, 32));
 	// generate signal
-        unsigned char output[nb_rb * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * NR_MAX_NB_LAYERS] __attribute__((aligned(64)));
-        bzero(output, sizeof(output));
-	if (input_fd == NULL) {
-	  nr_dlsch_encoding(gNB, 1, dlsch, frame, slot, output, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+  unsigned char output[nb_rb * NR_SYMBOLS_PER_SLOT * NR_NB_SC_PER_RB * NR_MAX_NB_LAYERS] __attribute__((aligned(64)));
+  bzero(output, sizeof(output));
+        if (input_fd == NULL) {
+          nr_dlsch_encoding(gNB, 1, dlsch, frame, slot, output, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 	}
 
 	for (SNR = snr0; SNR < snr1 && !stop; SNR += snr_step) {
@@ -536,27 +538,23 @@ int main(int argc, char **argv)
 			exit(-1);
 #endif
 
-      int a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER*NR_MAX_NB_LAYERS;  //number of segments to be allocated
-      int num_rb = dlsch0_ue->dlsch_config.number_rbs;
+      int a_segments = MAX_NUM_NR_DLSCH_SEGMENTS; // number of segments to be allocated
+      int num_rb = dlsch_config.number_rbs;
       if (num_rb != 273) {
         a_segments = a_segments*num_rb;
         a_segments = (a_segments/273)+1;
       }
       uint32_t dlsch_bytes = a_segments*1056;  // allocated bytes per segment
       __attribute__ ((aligned(32))) uint8_t b[dlsch_bytes];
-      uint8_t DLSCH_ids[1] = {0};
-      short *p_channel_output_fixed = channel_output_fixed;
-      uint8_t *p_b = b;
-      int available_bits_array[1] = { available_bits };
       nr_dlsch_decoding(UE,
                         &proc,
                         dlsch0_ue,
-                        &p_channel_output_fixed,
-                        &p_b,
-                        available_bits_array,
-                        1,
+                        0,
+                        &dlsch_config,
+                        channel_output_fixed,
+                        b,
                         num_rb,
-                        DLSCH_ids);
+                        available_bits);
 
       if (dlsch0_ue->last_iteration_cnt > dlsch0_ue->max_ldpc_iterations)
 				n_errors++;

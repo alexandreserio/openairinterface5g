@@ -446,11 +446,11 @@ static void nr_pusch_antenna_processing(void *arg)
   completed_task_ans(rdata->ans);
 }
 
-
 int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
                                 unsigned char Ns,
                                 int nl,
                                 unsigned short p,
+                                uint8_t lp,
                                 unsigned char symbol,
                                 NR_gNB_PUSCH *pusch_vars,
                                 int beam_nb,
@@ -486,7 +486,7 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
                      gold,
                      pilot,
                      (1000 + p),
-                     0,
+                     lp % 2,
                      nb_rb_pusch,
                      (pusch_pdu->bwp_start + pusch_pdu->rb_start) * NR_NB_SC_PER_RB,
                      pusch_pdu->dmrs_config_type,
@@ -900,8 +900,7 @@ void nr_srs_noise_power_estimation(uint16_t ofdm_symbol_size,
 #endif
 }
 
-int nr_srs_channel_interpolation(int ant,
-                                 int p_index,
+int nr_srs_channel_interpolation(int p_index,
                                  uint16_t ofdm_symbol_size,
                                  uint16_t first_carrier_offset,
                                  uint8_t N_symb_SRS,
@@ -933,7 +932,7 @@ int nr_srs_channel_interpolation(int ant,
     uint16_t srs_symbol_offset = srs_symb * ofdm_symbol_size;
 
 #ifdef SRS_DEBUG
-    LOG_I(NR_PHY, "====================== UE port %d --> gNB Rx antenna %i ======================\n", p_index, ant);
+    LOG_I(NR_PHY, "============================== UE port %d ====================================\n", p_index);
     LOG_I(NR_PHY, "============================== SRS symbol index %d ===========================\n", srs_symb);
 #endif
 

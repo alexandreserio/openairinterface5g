@@ -102,7 +102,7 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
 
   int Ptx = cfg->carrier_config.num_tx_ant.value;
   int Prx = cfg->carrier_config.num_rx_ant.value;
-  int max_ul_mimo_layers = 4;
+  int max_ul_mimo_layers = NR_MAX_NB_LAYERS;
 
   AssertFatal(Ptx > 0 && Ptx < 9,"Ptx %d is not supported\n", Ptx);
   AssertFatal(Prx > 0 && Prx < 9,"Prx %d is not supported\n", Prx);
@@ -119,8 +119,6 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
 
   nr_init_fde(); // Init array for frequency equalization of transform precoding of PUSCH
 
-  int ret_loader = load_nrLDPC_coding_interface(NULL, &gNB->nrLDPC_coding_interface);
-  AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
   gNB->max_nb_pdsch = MAX_MOBILES_PER_GNB;
   init_delay_table(fp->ofdm_symbol_size, MAX_DELAY_COMP, NR_MAX_OFDM_SYMBOL_SIZE, fp->delay_table);
@@ -140,6 +138,9 @@ void phy_init_nr_gNB(PHY_VARS_gNB *gNB)
 
   /// Transport init necessary for NR synchro
   init_nr_transport(gNB);
+
+  int ret_loader = load_nrLDPC_coding_interface(NULL, &gNB->nrLDPC_coding_interface, 16 * gNB->max_nb_pusch);
+  AssertFatal(ret_loader == 0, "error loading LDPC library\n");
 
   init_DLSCH_struct(gNB);
 
@@ -198,7 +199,7 @@ void phy_free_nr_gNB(PHY_VARS_gNB *gNB)
 {
   const int Ptx = gNB->gNB_config.carrier_config.num_tx_ant.value;
   const int Prx = gNB->gNB_config.carrier_config.num_rx_ant.value;
-  const int max_ul_mimo_layers = 4; // taken from phy_init_nr_gNB()
+  const int max_ul_mimo_layers = NR_MAX_NB_LAYERS;
   const int n_buf = Prx * max_ul_mimo_layers;
 
   PHY_MEASUREMENTS_gNB *meas = &gNB->measurements;

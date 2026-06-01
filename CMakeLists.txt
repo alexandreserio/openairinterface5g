@@ -13,8 +13,8 @@ if(CORE_COUNT GREATER 3)
   set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 endif()
 
-option(CUDA_ENABLE "Enable CUDA accelerated channel simulation" OFF)
-if(CUDA_ENABLE)
+option(ENABLE_CHANNEL_SIM_CUDA "Enable CUDA accelerated channel simulation" OFF)
+if(ENABLE_CHANNEL_SIM_CUDA)
     find_package(CUDA REQUIRED)
     find_package(CUDAToolkit REQUIRED)
     message(STATUS "CUDA explicitly enabled, building with GPU acceleration support.")
@@ -42,7 +42,7 @@ if(CUDA_ENABLE)
         message(STATUS "CUDA Explicit Copy path enabled (default ATS was overridden).")
     endif()
 
-    add_compile_definitions(ENABLE_CUDA)
+    add_compile_definitions(CHANNEL_SIM_CUDA)
 endif()
 
 #########################################################
@@ -163,14 +163,17 @@ add_boolean_option(AVX512 ${AUTODETECT_AVX512} "Whether AVX512 intrinsics is ava
 eval_boolean(AUTODETECT_AVX2 DEFINED CPUFLAGS AND CPUFLAGS MATCHES "avx2")
 add_boolean_option(AVX2 ${AUTODETECT_AVX2} "Whether AVX2 intrinsics is available on the host processor" ON)
 
+eval_boolean(AUTODETECT_GFNI DEFINED CPUFLAGS AND CPUFLAGS MATCHES "gfni")
+add_boolean_option(GFNI ${AUTODETECT_GFNI} "Whether GFNI intrinsics is available on the host processor" ON)
+
 message(STATUS "CPU architecture is ${CMAKE_SYSTEM_PROCESSOR}")
 if (CROSS_COMPILE)
   message(STATUS "setting as aarch64")
   set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -gdwarf-2 -lgcc -lrt")
 elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
   # The following intrinsics are assumed to be available on any x86 system
-  # (avx, f16c, fma, gnfi, mmx, pclmul, sse, sse2, sse3, xop)
-  set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -DSIMDE_X86_AVX_NATIVE -DSIMDE_X86_AVX_NATIVE -DSIMDE_X86_F16C_NATIVE -DSIMDE_X86_FMA_NATIVE -DSIMDE_X86_GFNI_NATIVE -DSIMDE_X86_MMX_NATIVE -DSIMDE_X86_PCLMUL_NATIVE -DSIMDE_X86_SSE2_NATIVE -DSIMDE_X86_SSE3_NATIVE -DSIMDE_X86_SSE_NATIVE -DSIMDE_X86_XOP_HAVE_COM_ -DSIMDE_X86_XOP_NATIVE")
+  # (avx, f16c, fma, mmx, pclmul, sse, sse2, sse3, xop)
+  set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -DSIMDE_X86_AVX_NATIVE -DSIMDE_X86_AVX_NATIVE -DSIMDE_X86_F16C_NATIVE -DSIMDE_X86_FMA_NATIVE -DSIMDE_X86_MMX_NATIVE -DSIMDE_X86_PCLMUL_NATIVE -DSIMDE_X86_SSE2_NATIVE -DSIMDE_X86_SSE3_NATIVE -DSIMDE_X86_SSE_NATIVE -DSIMDE_X86_XOP_HAVE_COM_ -DSIMDE_X86_XOP_NATIVE")
   message(STATUS "AVX512 intrinsics are ${AVX512}")
   if(${AVX512})
     set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -DSIMDE_X86_AVX512BW_NATIVE -DSIMDE_X86_AVX512F_NATIVE -DSIMDE_X86_AVX512VL_NATIVE -mavx512bw -march=skylake-avx512 -mtune=skylake-avx512")
@@ -181,13 +184,17 @@ elseif(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
   if(${AVX2})
     set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -DSIMDE_X86_AVX2_NATIVE -DSIMDE_X86_VPCLMULQDQ_NATIVE")
   endif()
-  if (CPUINFO MATCHES "sse4_1")
+  message(STATUS "GFNI intrinsics are ${GFNI}")
+  if(${GFNI})
+    set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -DSIMDE_X86_GFNI_NATIVE -mgfni")
+  endif()
+  if (CPUFLAGS MATCHES "sse4_1")
     set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -DSIMDE_X86_SSE4_1_NATIVE")
   endif()
-  if(CPUINFO MATCHES "sse4_2")
+  if(CPUFLAGS MATCHES "sse4_2")
     set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -DSIMDE_X86_SSE4_2_NATIVE")
   endif()
-  if(CPUINFO MATCHES "ssse3")
+  if(CPUFLAGS MATCHES "ssse3")
     set(C_FLAGS_PROCESSOR "${C_FLAGS_PROCESSOR} -DSIMDE_X86_SSSE3_NATIVE")
   endif()
 elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "armv7l")
@@ -229,9 +236,9 @@ if(CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(commonOpts "${commonOpts} -Wno-packed-bitfield-compat")
 endif()
 # clang: suppress complaints about unused command line argument (-rdynamic only
-# used during linking)
+# used during linking) and "const member leaves the object uninitialized"
 if(CMAKE_C_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-  set(commonOpts "${commonOpts} -Wno-unused-command-line-argument")
+  set(commonOpts "${commonOpts} -Wno-unused-command-line-argument -Wno-default-const-init-field-unsafe")
 endif()
 
 set(CMAKE_C_FLAGS
@@ -850,6 +857,7 @@ set(PHY_NRLDPC_CODINGIF
 )
 
 add_library(dfts MODULE ${OPENAIR1_DIR}/PHY/TOOLS/oai_dfts.c ${OPENAIR1_DIR}/PHY/TOOLS/oai_dfts_neon.c)
+target_compile_options(dfts PRIVATE -fno-semantic-interposition)
 
 set(PHY_SRC_COMMON
   ${OPENAIR1_DIR}/PHY/LTE_TRANSPORT/dci_tools_common.c
@@ -1144,11 +1152,19 @@ set(NR_PDCP_SRC
   ${OPENAIR2_DIR}/LAYER2/nr_pdcp/nr_pdcp_integrity_nia2.c
   ${OPENAIR2_DIR}/LAYER2/nr_pdcp/nr_pdcp_integrity_nia1.c
   ${OPENAIR2_DIR}/LAYER2/nr_pdcp/asn1_utils.c
+  )
+
+# gNB: PDCP + CU-CP/CU-UP interface
+set(NR_PDCP_SRC_GNB
+  ${NR_PDCP_SRC}
   openair2/LAYER2/nr_pdcp/cucp_cuup_handler.c
   openair2/LAYER2/nr_pdcp/cuup_cucp_if.c
   openair2/LAYER2/nr_pdcp/cuup_cucp_direct.c
   openair2/LAYER2/nr_pdcp/cuup_cucp_e1ap.c
   )
+
+# UE build: PDCP only; CU-CP/CU-UP interface is gNB-only.
+set(NR_PDCP_SRC_UE ${NR_PDCP_SRC})
 
 set(NR_SDAP_SRC
   ${OPENAIR2_DIR}/SDAP/nr_sdap/nr_sdap.c
@@ -1193,7 +1209,7 @@ set(L2_LTE_SRC
   )
 
 set(L2_NR_SRC
-  ${NR_PDCP_SRC}
+  ${NR_PDCP_SRC_GNB}
   ${NR_SDAP_SRC}
   ${NR_RRC_DIR}/rrc_gNB.c
   ${NR_RRC_DIR}/mac_rrc_dl_direct.c
@@ -1229,7 +1245,7 @@ set(L2_RRC_SRC_UE
   )
 
 set(NR_L2_SRC_UE
-  ${NR_PDCP_SRC}
+  ${NR_PDCP_SRC_UE}
   ${NR_SDAP_SRC}
   ${NR_UE_RRC_DIR}/L2_interface_ue.c
   ${NR_UE_RRC_DIR}/main_ue.c
@@ -1271,7 +1287,9 @@ set (MAC_NR_SRC
   ${NR_GNB_MAC_DIR}/gNB_scheduler.c
   ${NR_GNB_MAC_DIR}/gNB_scheduler_bch.c
   ${NR_GNB_MAC_DIR}/gNB_scheduler_dlsch.c
+  ${NR_GNB_MAC_DIR}/gNB_scheduler_dlsch_default_policies.c
   ${NR_GNB_MAC_DIR}/gNB_scheduler_ulsch.c
+  ${NR_GNB_MAC_DIR}/gNB_scheduler_ulsch_default_policies.c
   ${NR_GNB_MAC_DIR}/gNB_scheduler_primitives.c
   ${NR_GNB_MAC_DIR}/gNB_scheduler_phytest.c
   ${NR_GNB_MAC_DIR}/gNB_scheduler_uci.c
@@ -1373,6 +1391,7 @@ add_library(e1_if
 target_link_libraries(e1_if PRIVATE asn1_nr_rrc_hdrs asn1_lte_rrc_hdrs asn1_f1ap SECURITY ${OPENSSL_LIBRARIES} e1ap GTPV1U)
 
 target_link_libraries(L2_NR PRIVATE f1ap x2ap s1ap ngap nr_rrc e1ap nr_rlc nr_common)
+target_compile_definitions(L2_NR PRIVATE PDCP_CUCP_CUUP)
 if(OAI_AERIAL)
     target_compile_definitions(L2_NR PRIVATE ENABLE_AERIAL)
 endif()
@@ -1380,7 +1399,6 @@ endif()
 add_library(L2_LTE_NR
   # temporary solution until 4G/5G code completely untangled (as evidenced by deletion of the following file)
   ${MAC_DIR}/dummy_functions.c
-  ${ENB_APP_SRC}
 )
 
 target_link_libraries(L2_LTE_NR PRIVATE f1ap s1ap nr_rrc)
@@ -1906,7 +1924,7 @@ add_executable(nr-cuup
   executables/nr-cuup.c
   ${NR_RRC_DIR}/rrc_gNB_UE_context.c
   ${OPENAIR2_DIR}/E1AP/e1ap_setup.c
-  ${NR_PDCP_SRC}
+  ${NR_PDCP_SRC_GNB}
   ${NR_SDAP_SRC}
   )
 
@@ -1917,6 +1935,7 @@ target_link_libraries(nr-cuup PRIVATE
                       alg
                       dl pthread ${T_LIB})
 target_link_libraries(nr-cuup PRIVATE asn1_lte_rrc_hdrs asn1_nr_rrc_hdrs)
+target_compile_definitions(nr-cuup PRIVATE PDCP_CUCP_CUUP)
 if(E2_AGENT)
   target_link_libraries(nr-cuup PRIVATE e2_agent e2_agent_arg e2_ran_func_cuup)
   target_compile_definitions(nr-cuup PRIVATE ${E2AP_VERSION} ${KPM_VERSION} E2_AGENT)
@@ -2097,13 +2116,13 @@ target_link_libraries(nr_srssim PRIVATE
   m pthread ITTI dl nr_ue_phy_meas physim_common softmodem_common
   )
 
-if(CUDA_ENABLE)
+if(ENABLE_CHANNEL_SIM_CUDA)
   if (TARGET oai_cuda_lib)
       target_link_libraries(nr_dlsim PRIVATE oai_cuda_lib)
       target_link_libraries(nr_ulsim PRIVATE oai_cuda_lib)
 
-      target_compile_definitions(nr_dlsim PRIVATE ENABLE_CUDA)
-      target_compile_definitions(nr_ulsim PRIVATE ENABLE_CUDA)
+      target_compile_definitions(nr_dlsim PRIVATE CHANNEL_SIM_CUDA)
+      target_compile_definitions(nr_ulsim PRIVATE CHANNEL_SIM_CUDA)
   endif()
 endif()
 
