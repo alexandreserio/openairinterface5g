@@ -149,7 +149,7 @@ static bool has_established_pdu_session(const gNB_RRC_UE_t *ue_context)
 {
   // usa o rrc para verificar se existe pdu establecida para este UE
   FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t *, pdu, &ue_context->pduSessions) {
-    if (pdu->status == PDU_SESSION_STATUS_ESTABLISHED || pdu->status == PDU_SESSION_STATUS_REESTABLISHED)
+    if (pdu->status == PDU_SESSION_STATUS_ESTABLISHED)
       return true;
   }
   return false;
