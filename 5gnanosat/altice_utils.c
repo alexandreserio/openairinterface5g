@@ -5,6 +5,12 @@
 #include <signal.h>
 #include <wiringPi.h>
 #include <errno.h>
+#include <time.h>
+
+//INCLUDES FROM OAI
+#include "openair1/PHY/defs_nr_UE.h"
+
+
 //colors
 #define CYAN "\033[1;36m"
 #define RED "\033[1;31m"
@@ -47,7 +53,7 @@ int enable_PA(void){
     return 0;
 }
 
-int disablePA(void){
+int disable_PA(void){
     fprintf(stdout, "%sDeactivating 2V for Power Amplifier...%s\n", WHITE, DEFAULT);
     digitalWrite(LED_2V, LOW);
     digitalWrite(RELE_2V, LOW);
@@ -56,6 +62,52 @@ int disablePA(void){
     digitalWrite(LED_5V, LOW);
     digitalWrite(RELE_5V, LOW);
     sleep(1);
+    return 0;
+}
+
+FILE *logfile = NULL;
+int meas_log_init(){
+    time_t now;
+    time(&now);
+    struct tm *local = localtime(&now);
+    int year = local->tm_year + 1900;
+    int month = local->tm_mon + 1;
+    int day = local->tm_mday;
+    int hour = local->tm_hour;
+    int min = local->tm_min;
+
+    char fname_logs[100];
+    snprintf(fname_logs, sizeof(fname_logs), "../../UE_logs/ue_meas_%02d-%02d-%04d_%02d-%02d.log", day, month, year, hour, min);
+    logfile = fopen(fname_logs, "wa");
+    if(logfile == NULL){
+        LOG_E(UTIL, "Error opening file for measurements storage");
+        return 1;
+    }
+    LOG_A(UTIL, "Measurements being stored (fname = %s)", fname_logs);
+    return 0;
+}
+
+void saveMeasurements(const char *string){
+    time_t tmr;
+    time(&tmr);
+    struct tm *tstamp = localtime(&tmr);
+    int hour = tstamp->tm_hour;
+    int min = tstamp->tm_min;
+    int sec = tstamp->tm_sec;
+    if(string == NULL) {
+        return;
+    }
+    fprintf(logfile, "[%02d:%02d:%02d] %s", hour, min, sec, string);
+    fflush(logfile);
+    return;
+}
+
+int meas_log_close(){
+    if(logfile == NULL){
+        LOG_E(UTIL, "Log filename not found to close...\n");
+        return 1;
+    }
+    fclose(logfile);
     return 0;
 }
 

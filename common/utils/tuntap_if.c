@@ -266,7 +266,7 @@ void setup_ue_ipv4_route(const char* ifname, int instance_id, const char *ipv4)
                     table_id);
   */
   int res = sprintf(command_line,
-                    "ip route add 192.168.70.128/26 via 15.0.0.1 dev %s table %d",
+                    "ip route add default via 15.0.0.1 dev %s table %d",
                     ifname,
                     table_id); //[ALEX]
 

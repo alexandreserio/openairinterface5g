@@ -1561,7 +1561,7 @@ static void *ru_thread( void *param ) {
             LOG_E(HW,"Could not start tx write thread\n");
         }
         else{
-            LOG_I(PHY,"tx write thread ready\n");
+            LOG_A(PHY,"tx write thread ready\n");
         }
      }
   }
