@@ -1466,7 +1466,7 @@ extern "C" {
   LOG_W(HW,"Actual master clock: %fMHz...\n",s->usrp->get_master_clock_rate()/1e6);
   LOG_W(HW,"Actual clock source %s...\n",s->usrp->get_clock_source(0).c_str());
   LOG_W(HW,"Actual time source %s...\n",s->usrp->get_time_source(0).c_str());
-  sleep(2); //ALEX
+  //sleep(2); //ALEX
 
   // create tx & rx streamer
   uhd::stream_args_t stream_args_rx("sc16", "sc16");
@@ -1524,7 +1524,7 @@ extern "C" {
     LOG_I(HW,"  Actual TX antenna: %s...\n", s->usrp->get_tx_antenna(i+choffset).c_str());
     LOG_W(HW,"  Actual TX packet size: %lu\n",s->tx_stream->get_max_num_samps());
   }
-  sleep(3); //ALEX
+  //sleep(3); //ALEX
 
   std::cout << boost::format("Using Device: %s") % s->usrp->get_pp_string() << std::endl;
   LOG_W(HW,"Device timestamp: %f...\n", s->usrp->get_time_now().get_real_secs()); //[ALEX] Changed from I to W
