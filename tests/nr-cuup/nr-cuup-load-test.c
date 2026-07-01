@@ -30,7 +30,6 @@ void e1_bearer_context_modif(const e1ap_bearer_mod_req_t *req) { abort(); } /* C
 void e1_bearer_release_cmd(const e1ap_bearer_release_cmd_t *cmd) { abort(); } /* CU-UP */
 void e1_reset(void) { abort(); } /* CU-UP */
 instance_t *N3GTPUInst = NULL; /* CU-UP */
-instance_t CUuniqInstance=0; /* CU-UP */
 
 void exit_function(const char *file, const char *function, const int line, const char *s, const int assert)
 {

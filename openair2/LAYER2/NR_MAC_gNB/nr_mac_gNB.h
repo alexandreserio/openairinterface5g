@@ -20,6 +20,7 @@
 #include "common/utils/ds/seq_arr.h"
 #include "common/utils/nr/nr_common.h"
 #include "common/utils/ds/byte_array.h"
+#include "common/utils/ds/spsc_q.h"
 #include "openair2/LAYER2/nr_rlc/nr_rlc_configuration.h"
 
 #define NR_SCHED_LOCK(lock)                                        \
@@ -73,6 +74,7 @@
 #define NR_NB_RA_PROC_MAX 4
 #define MAX_NUM_OF_SSB 64
 #define MAX_NUM_NR_PRACH_PREAMBLES 64
+#define NR_MAX_SIB_LENGTH 2976 // 3GPP TS 38.331 section 5.2.1
 
 uint8_t nr_get_rv(int rel_round);
 
@@ -103,6 +105,14 @@ typedef struct {
   int idx;
   bool new_beam;
 } NR_beam_alloc_t;
+
+/** Pending CN paging record */
+typedef struct {
+  /// UE_ID for PF/PO computation (TS 38.304 §7.1)
+  uint16_t ue_id;
+  /// ng-5G-S-TMSI (48 bits)
+  uint64_t fiveg_s_tmsi;
+} nr_mac_pcch_record_t;
 
 typedef struct nr_pdsch_AntennaPorts_t {
   int N1;
@@ -175,12 +185,18 @@ typedef struct nr_power_config {
   int failure_thres;
 } nr_power_config_t;
 
+typedef enum nr_srs_type_e {
+  NO_SRS,
+  PERIODIC_SRS,
+  APERIODIC_SRS,
+} nr_srs_type_t;
+
 typedef struct nr_mac_config_s {
   nr_pdsch_AntennaPorts_t pdsch_AntennaPorts;
   int pusch_AntennaPorts;
   int minRXTXTIME;
   int do_CSIRS;
-  int do_SRS;
+  nr_srs_type_t do_SRS;
   int do_TCI;
   int max_num_rsrp;
   bool force_256qam_off;
@@ -207,6 +223,8 @@ typedef struct nr_mac_config_s {
   nr_ptrs_config_t *ptrs;
   nr_config_report_type_t report_type;
   nr_beam_table_t bt;
+  /// Spatial stream indexing for mapping onto RU ports. Needed for MU-MIMO
+  uint16_t spatial_stream_index[MAX_NUM_SPATIAL_STREAMS];
 } nr_mac_config_t;
 
 typedef struct NR_preamble_ue {
@@ -320,6 +338,8 @@ typedef struct {
   /// Max prach length in slots
   int prach_len;
   nr_prach_info_t prach_info;
+  /// PCCH SDU queue (one spsc_q per common-channel context)
+  spsc_q_t pcch_queue;
 } NR_COMMON_channels_t;
 
 // SP ZP CSI-RS Resource Set Activation/Deactivation MAC CE
@@ -410,6 +430,7 @@ typedef struct NR_sched_pucch {
   int second_hop_prb;
   int nr_of_symb;
   int start_symb;
+  int beam_idx;
 } NR_sched_pucch_t;
 
 typedef struct NR_pusch_dmrs {
@@ -455,6 +476,10 @@ typedef struct NR_sched_pusch {
 
   /// TPC command for this PUSCH
   int tpc_pusch;
+  // Antenna ports to use
+  nfapi_nr_spatial_stream_index_t ant_port_idx;
+  // Antenna port for PUSCH DCI
+  uint16_t dci_ant_idx;
 } NR_sched_pusch_t;
 
 typedef struct NR_pdsch_dmrs {
@@ -499,6 +524,8 @@ typedef struct NR_sched_pdsch {
   int time_domain_allocation;
   NR_tda_info_t tda_info;
   feedback_action_t action;
+  // Baseband ports to use
+  nfapi_nr_spatial_stream_index_t ant_port_idx;
 } NR_sched_pdsch_t;
 
 typedef struct NR_UE_harq {
@@ -692,6 +719,7 @@ typedef struct {
 
   /// sri, ul_ri and tpmi based on SRS
   nr_srs_feedback_t srs_feedback;
+  NR_timer_t aperiodic_srs_trigger;
 
   /// per-LC configuration
   seq_arr_t lc_config;
@@ -1007,6 +1035,7 @@ struct nr_ul_candidate {
   int8_t retx_harq_pid;
   int retx_rbSize;
   bool sched_inactive;
+  int sched_srs;
   uint32_t pending_bytes;
   float avg_throughput;
   float bler;

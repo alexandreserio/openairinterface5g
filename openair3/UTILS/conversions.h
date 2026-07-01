@@ -208,20 +208,12 @@ do {                                \
     (bitstring)->buf[1] = (intprotalg);            \
 }while(0)
 
-#define KENB_STAR_TO_BIT_STRING(kenbstar, bitstring)    \
-do {                            \
-    (bitstring)->size=32;                \
-    (bitstring)->bits_unused=0;            \
-    (bitstring)->buf= calloc (32, sizeof (uint8_t));\
-    memcpy((bitstring)->buf, kenbstar, 32*sizeof(uint8_t));            \
-}while(0)
-
-#define KGNB_STAR_TO_BIT_STRING(kgnbstar, bitstring)          \
-  do {                                                        \
-    (bitstring)->size = 32;                                   \
-    (bitstring)->bits_unused = 0;                             \
-    (bitstring)->buf = calloc(32, sizeof(uint8_t));           \
-    memcpy((bitstring)->buf, kgnbstar, 32 * sizeof(uint8_t)); \
+#define AS_KEY_STAR_TO_BIT_STRING(askeystar, bitstring)        \
+  do {                                                         \
+    (bitstring)->size = 32;                                    \
+    (bitstring)->bits_unused = 0;                              \
+    (bitstring)->buf = calloc_or_fail(32, sizeof(uint8_t));    \
+    memcpy((bitstring)->buf, askeystar, 32 * sizeof(uint8_t)); \
   } while (0)
 
 #define UEAGMAXBITRTD_TO_ASN_PRIMITIVES(uegmaxbitrtd, asnprimitives)        \

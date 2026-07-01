@@ -27,10 +27,9 @@ def GenericHelp(vers):
 	print('  --local Force local execution: rewrites the test xml script before running to always execute on localhost. Assumes')
 	print('          images are available locally, will not remove any images and will run inside the current repo directory')
 
-def GitSrvHelp(repository,branch,commit,mergeallow,targetbranch):
+def GitSrvHelp(repository,branch,mergeallow,targetbranch):
 	print('  --repository=[OAI RAN Repository URL]                                      -- ' + repository)
 	print('  --branch=[OAI RAN Repository Branch]                                       -- ' + branch)
-	print('  --commitID=[OAI RAN Repository Commit SHA-1]                               -- ' + commit)
 	print('  --ranAllowMerge=[Allow Merge Request (with target branch) (true or false)]    -- ' + mergeallow)
 	print('  --targetBranch=[Target Branch in case of a Merge Request]                  -- ' + targetbranch)
 

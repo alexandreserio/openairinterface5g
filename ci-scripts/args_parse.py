@@ -44,11 +44,8 @@ def ArgsParse(argvs,CiTestObj,RAN,HTML,CONTAINERS,HELP,CLUSTER):
         elif re.match(r'^\-\-mode=(.+)$', myArgv, re.IGNORECASE):
             matchReg = re.match(r'^\-\-mode=(.+)$', myArgv, re.IGNORECASE)
             mode = matchReg.group(1)
-        elif re.match(r'^\-\-repository=(.+)$|^\-\-ranRepository=(.+)$', myArgv, re.IGNORECASE):
-            if re.match(r'^\-\-repository=(.+)$', myArgv, re.IGNORECASE):
-                matchReg = re.match(r'^\-\-repository=(.+)$', myArgv, re.IGNORECASE)
-            else:
-                matchReg = re.match(r'^\-\-ranRepository=(.+)$', myArgv, re.IGNORECASE)
+        elif re.match(r'^\-\-repository=(.+)$', myArgv, re.IGNORECASE):
+            matchReg = re.match(r'^\-\-repository=(.+)$', myArgv, re.IGNORECASE)
             CiTestObj.repository = matchReg.group(1)
             RAN.repository=matchReg.group(1)
             HTML.repository=matchReg.group(1)
@@ -61,27 +58,15 @@ def ArgsParse(argvs,CiTestObj,RAN,HTML,CONTAINERS,HELP,CLUSTER):
                 RAN.merge=True
                 CONTAINERS.merge=True
                 CLUSTER.merge=True
-        elif re.match(r'^\-\-branch=(.+)$|^\-\-ranBranch=(.+)$', myArgv, re.IGNORECASE):
-            if re.match(r'^\-\-branch=(.+)$', myArgv, re.IGNORECASE):
-                matchReg = re.match(r'^\-\-branch=(.+)$', myArgv, re.IGNORECASE)
-            else:
-                matchReg = re.match(r'^\-\-ranBranch=(.+)$', myArgv, re.IGNORECASE)
+        elif re.match(r'^\-\-branch=(.+)$', myArgv, re.IGNORECASE):
+            matchReg = re.match(r'^\-\-branch=(.+)$', myArgv, re.IGNORECASE)
             CiTestObj.branch = matchReg.group(1)
             RAN.branch=matchReg.group(1)
             HTML.branch=matchReg.group(1)
             CONTAINERS.branch=matchReg.group(1)
             CLUSTER.branch=matchReg.group(1)
-        elif re.match(r'^\-\-commitID=(.*)$|^\-\-ranCommitID=(.*)$', myArgv, re.IGNORECASE):
-            if re.match(r'^\-\-commitID=(.*)$', myArgv, re.IGNORECASE):
-                matchReg = re.match(r'^\-\-commitID=(.*)$', myArgv, re.IGNORECASE)
-            else:
-                matchReg = re.match(r'^\-\-ranCommitID=(.*)$', myArgv, re.IGNORECASE)
-            HTML.commitID=matchReg.group(1)
-        elif re.match(r'^\-\-targetBranch=(.*)$|^\-\-ranTargetBranch=(.*)$', myArgv, re.IGNORECASE):
-            if re.match(r'^\-\-targetBranch=(.*)$', myArgv, re.IGNORECASE):
-                matchReg = re.match(r'^\-\-targetBranch=(.*)$', myArgv, re.IGNORECASE)
-            else:
-                matchReg = re.match(r'^\-\-ranTargetBranch=(.*)$', myArgv, re.IGNORECASE)
+        elif re.match(r'^\-\-targetBranch=(.*)$', myArgv, re.IGNORECASE):
+            matchReg = re.match(r'^\-\-targetBranch=(.*)$', myArgv, re.IGNORECASE)
             RAN.targetBranch=matchReg.group(1)
             CONTAINERS.targetBranch=matchReg.group(1)
             CLUSTER.targetBranch=matchReg.group(1)

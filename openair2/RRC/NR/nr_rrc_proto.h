@@ -72,8 +72,6 @@ void prepare_and_send_ue_context_modification_f1(rrc_gNB_ue_context_t *ue_contex
                                                  e1ap_bearer_setup_resp_t *e1ap_resp);
 void trigger_bearer_setup(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, uint64_t ueAggMaxBitRateDownlink);
 
-int rrc_gNB_generate_pcch_msg(sctp_assoc_t assoc_id, const NR_SIB1_t *sib, uint32_t tmsi, uint8_t paging_drx);
-
 /** @}*/
 
 /* UE Management Procedures */
@@ -104,5 +102,5 @@ void rrc_f1_ue_context_setup_for_target_du(const gNB_RRC_INST *rrc,
                                            gNB_RRC_UE_t *ue,
                                            const nr_rrc_cell_container_t *cell,
                                            const byte_array_t *ho_prep_info);
-
+const neighbour_cell_configuration_t *get_neighbour_cell_config(const gNB_RRC_INST *rrc, int cell_id);
 #endif

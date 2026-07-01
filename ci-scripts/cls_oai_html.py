@@ -35,7 +35,6 @@ class HTMLManagement():
 
 		self.repository = ''
 		self.branch = ''
-		self.commitID = ''
 
 		self.nbTestXMLfiles = 0
 		self.htmlTabRefs = []
@@ -76,12 +75,12 @@ class HTMLManagement():
 			self.htmlFile.write('    <tr style="border-collapse: collapse; border: none;">\n')
 			self.htmlFile.write('      <td style="border-collapse: collapse; border: none;">\n')
 			self.htmlFile.write('        <a href="http://www.openairinterface.org/">\n')
-			self.htmlFile.write('           <img src="http://www.openairinterface.org/wp-content/uploads/2016/03/cropped-oai_final_logo2.png" alt="" border="none" height=50 width=150>\n')
+			self.htmlFile.write('           <img src="https://raw.githubusercontent.com/duranta-project/governance/main/logos/Duranta-Logo-Color.png" alt="" border="none" style="margin-right: 2rem;" width=150>\n')
 			self.htmlFile.write('           </img>\n')
 			self.htmlFile.write('        </a>\n')
 			self.htmlFile.write('      </td>\n')
 			self.htmlFile.write('      <td style="border-collapse: collapse; border: none; vertical-align: center;">\n')
-			self.htmlFile.write('        <b><font size = "6">Job Summary -- Job: TEMPLATE_JOB_NAME -- Build-ID: TEMPLATE_BUILD_ID</font></b>\n')
+			self.htmlFile.write('        <b><font size = "6">TEMPLATE_JOB_NAME -- Build-ID: TEMPLATE_BUILD_ID</font></b>\n')
 			self.htmlFile.write('      </td>\n')
 			self.htmlFile.write('    </tr>\n')
 			self.htmlFile.write('  </table>\n')
@@ -100,7 +99,13 @@ class HTMLManagement():
 			self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-log-out"></span> Test Branch </td>\n')
 			self.htmlFile.write('       <td>' + self.branch + '</td>\n')
 			self.htmlFile.write('     </tr>\n')
-			commit_message = subprocess.check_output("git log -n1 --pretty=format:\"%s\" " + self.commitID, shell=True, universal_newlines=True)
+			commit_id = subprocess.check_output("git log -n1 --pretty=format:\"%H\" ", shell=True, universal_newlines=True)
+			commit_id = commit_id.strip()
+			self.htmlFile.write('     <tr>\n')
+			self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-tag"></span> Commit ID </td>\n')
+			self.htmlFile.write('       <td>' + commit_id + '</td>\n')
+			self.htmlFile.write('     </tr>\n')
+			commit_message = subprocess.check_output("git log -n1 --pretty=format:\"%s\" ", shell=True, universal_newlines=True)
 			commit_message = commit_message.strip()
 			self.htmlFile.write('     <tr>\n')
 			self.htmlFile.write('       <td bgcolor = "lightcyan" > <span class="glyphicon glyphicon-comment"></span> Commit Message </td>\n')

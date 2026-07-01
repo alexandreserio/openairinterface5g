@@ -165,6 +165,15 @@ def ExecuteActionWithParam(action, ctx, node):
 		core_op = getattr(cls_oaicitest.OaiCiTest, action)
 		success = core_op(cn_id, ctx, HTML)
 
+	elif action == 'DeployWithScript' or action == 'UndeployWithScript':
+		script = test.findtext('script')
+		options = test.findtext('options')
+		if action == 'DeployWithScript':
+			deploymentTag = RAN.branch
+			success = cls_oaicitest.DeployWithScript(HTML, node, script, options, deploymentTag)
+		elif action == 'UndeployWithScript':
+			success = cls_oaicitest.UndeployWithScript(HTML, ctx, node, script, options)
+
 	elif action == 'Deploy_Object' or action == 'Undeploy_Object' or action == "Create_Workspace" or action == "Stop_Object":
 		CONTAINERS.yamlPath = test.findtext('yaml_path')
 		CONTAINERS.services = test.findtext('services')
@@ -236,7 +245,8 @@ def ExecuteActionWithParam(action, ctx, node):
 	elif action == 'AnalyzeRTStats_Object':
 		yaml = test.findtext('stats_cfg')
 		service = test.findtext('service')
-		success = CONTAINERS.AnalyzeRTStatsObject(HTML, node, ctx, yaml, service)
+		stats_files = (test.findtext('stats_file') or '').split()
+		success = CONTAINERS.AnalyzeRTStatsObject(HTML, node, ctx, yaml, service, stats_files)
 
 	else:
 		logging.warning(f"unknown action {action}, skip step")

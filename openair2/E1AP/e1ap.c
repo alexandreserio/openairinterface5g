@@ -540,8 +540,6 @@ static void e1_task_handle_sctp_association_resp(E1_t type,
       getCxtE1(instance)->gtpInstF1U = cuup_task_create_gtpu_instance_to_du(&IPaddr);
     if (getCxtE1(instance)->gtpInstF1U < 0)
       LOG_E(E1AP, "Failed to create CUUP F1-U UDP listener\n");
-    extern instance_t CUuniqInstance;
-    CUuniqInstance = getCxtE1(instance)->gtpInstF1U;
     cuup_init_n3(instance);
     e1apCUUP_send_SETUP_REQUEST(inst->cuup.assoc_id, &inst->cuup.setupReq);
   }

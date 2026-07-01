@@ -56,8 +56,6 @@ void get_num_re_dmrs(nfapi_nr_ue_pusch_pdu_t *pusch_pdu, uint8_t *nb_dmrs_re_per
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
 int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
 THREAD_STRUCT thread_struct;
-instance_t DUuniqInstance = 0;
-instance_t CUuniqInstance = 0;
 openair0_config_t openair0_cfg[MAX_CARDS];
 
 RAN_CONTEXT_t RC;
@@ -211,8 +209,11 @@ static void configure_SL_UE(PHY_VARS_NR_UE *UE, int mu, int N_RB, int ssb_offset
 
   sl_init_frame_parameters(UE);
   sl_ue_phy_init(UE);
-  perform_symbol_rotation(fp, fp->sl_CarrierFreq, fp->symbol_rotation[link_type_sl]);
-  init_timeshift_rotation(fp);
+  perform_symbol_rotation(fp->symbols_per_slot * fp->slots_per_frame / 10,
+                          fp->numerology_index,
+                          fp->sl_CarrierFreq,
+                          fp->symbol_rotation[link_type_sl]);
+  init_timeshift_rotation(fp->ofdm_symbol_size, fp->nb_prefix_samples, fp->ofdm_offset_divisor, fp->timeshift_symbol_rotation);
   LOG_I(PHY, "Dumping Sidelink Frame Parameters\n");
   nr_dump_frame_parms(fp);
 }

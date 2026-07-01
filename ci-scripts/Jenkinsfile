@@ -20,13 +20,11 @@ if (params.LockResources != null && params.LockResources.trim().length() > 0)
 // Global Parameters. Normally they should be populated when the master job
 // triggers the slave job with parameters
 
-def INTERNAL_REPO = "asterix:/home/git/openairinterface5g.git"
-def sourceBranch = params.sourceBranch ?: env.GIT_BRANCH
 def targetBranch = params.targetBranch ?: 'develop'
-def commitID = params.sourceCommit ?: env.GIT_COMMIT
-def testRepository = params.customRepository ?: INTERNAL_REPO
-def testBranch = params.customBranch ?: "${sourceBranch}-${commitID}"
+def testRepository = params.repository ?: 'git@asterix:/home/git/openairinterface5g.git'
+def testBranch = params.branch ?: 'develop'
 def mergeWithTarget = params.mergeWithTarget ?: false
+def sourceBranch = params.sourceBranch ?: testBranch
 
 def flexricOption = ""
 def runWithOC = false
@@ -41,11 +39,17 @@ pipeline {
     timestamps()
     ansiColor('xterm')
     lock(extra: lockResources)
+    skipDefaultCheckout()
   }
 
   stages {
     stage("Build Init") {
       steps {
+        checkout(
+          scmGit(branches: [[name: "${branch}"]],
+                 userRemoteConfigs: [[url: "${repository}"]],
+                 extensions: [cleanBeforeCheckout()])
+        )
         script {
           echo '\u2705 \u001B[94mBuild Init\u001B[0m'
           JOB_TIMESTAMP = sh(returnStdout: true, script: 'date --utc --rfc-3339=seconds | sed -e "s#+00:00##"').trim()
@@ -113,8 +117,7 @@ pipeline {
             }
             sh """
               python3 main.py --mode=InitiateHtml --repository=${testRepository} \
-                              --branch=${testBranch} --commitID=${commitID} \
-                              ${mainPythonAllXmlFiles}
+                              --branch=${testBranch} ${mainPythonAllXmlFiles}
             """
             if (runWithOC) {
               withCredentials([usernamePassword(credentialsId: "${params.OC_Credentials}", usernameVariable: 'OC_Username', passwordVariable: 'OC_Password')]) {

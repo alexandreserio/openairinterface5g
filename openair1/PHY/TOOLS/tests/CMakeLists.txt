@@ -23,6 +23,7 @@ target_link_libraries(dft_test minimal_lib shlib_loader SIMU m)
 add_dependencies(tests dft_test)
 add_dependencies(dft_test dfts) # trigger build of dfts (shared lib for DFT)
 add_test(NAME dft_test COMMAND ./dft_test)
+set_tests_properties(dft_test PROPERTIES ENVIRONMENT "LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}")
 
 add_executable(test_vector_op test_vector_op.cpp)
 target_link_libraries(test_vector_op PRIVATE LOG minimal_lib)

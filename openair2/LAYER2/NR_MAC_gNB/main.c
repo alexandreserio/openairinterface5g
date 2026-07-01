@@ -31,7 +31,6 @@
 #include "assertions.h"
 #include "common/ngran_types.h"
 #include "common/ran_context.h"
-#include "common/utils/T/T.h"
 #include "executables/softmodem-common.h"
 #include "linear_alloc.h"
 #include "nr_pdcp/nr_pdcp_entity.h"
@@ -387,7 +386,8 @@ void mac_top_init_gNB(ngran_node_t node_type,
       LOG_D(MAC,"[MAIN] ALLOCATE %zu Bytes for %d gNB_MAC_INST @ %p\n",sizeof(gNB_MAC_INST), RC.nb_nr_macrlc_inst, RC.mac);
       
       bzero(RC.nrmac[i], sizeof(gNB_MAC_INST));
-      
+      nr_mac_pcch_queue_init(&RC.nrmac[i]->common_channels[0]);
+
       RC.nrmac[i]->Mod_id = i;
 
       // set values para o scheduler e HARQ, que sao usados mesmo antes de receber a configuracao RRC completa do gNB
@@ -465,6 +465,7 @@ void mac_top_destroy_gNB(gNB_MAC_INST *mac)
 {
   // destrou func liberta a memoria alocada 
   NR_COMMON_channels_t *cc = &mac->common_channels[0];
+  nr_mac_pcch_queue_free(cc);
   ASN_STRUCT_FREE(asn_DEF_NR_BCCH_BCH_Message, cc->mib);
   ASN_STRUCT_FREE(asn_DEF_NR_BCCH_DL_SCH_Message, cc->sib1);
   ASN_STRUCT_FREE(asn_DEF_NR_ServingCellConfigCommon, cc->ServingCellConfigCommon);

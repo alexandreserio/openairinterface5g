@@ -38,6 +38,7 @@
 #include "nr_pdcp_asn1_utils.h"
 #include "nr_pdcp_timer_thread.h"
 #include "nr_pdcp_ue_manager.h"
+#include "openair2/F1AP/f1ap_common.h"
 #include "openair2/F1AP/f1ap_ids.h"
 #include "openair2/SDAP/nr_sdap/nr_sdap.h"
 #include "pdcp.h"
@@ -442,8 +443,9 @@ static void deliver_pdu_drb_gnb(void *deliver_pdu_data, ue_id_t ue_id, int rb_id
 
   if (NODE_IS_CU(node_type)) {
     LOG_D(PDCP, "%s() (drb %d) sending message to gtp size %d\n", __func__, rb_id, size);
-    extern instance_t CUuniqInstance;
-    gtpv1uSendDirectWithNRUSeqNum(CUuniqInstance, ue_id, rb_id, (uint8_t *)buf, size);
+    const f1ap_cudu_inst_t *inst = getCxt(0);
+    DevAssert(inst);
+    gtpv1uSendDirectWithNRUSeqNum(inst->gtpInst, ue_id, rb_id, (uint8_t *)buf, size);
   } else {
     uint8_t *memblock = malloc16(size);
     memcpy(memblock, buf, size);

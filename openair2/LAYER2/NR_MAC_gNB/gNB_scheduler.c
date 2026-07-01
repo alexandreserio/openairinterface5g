@@ -182,6 +182,7 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP, frame_t frame, slot_t slo
     if (IS_SA_MODE(get_softmodem_params())) {
       schedule_nr_sib1(module_idP, frame, slot, &sched_info->DL_req, &sched_info->TX_req);
       schedule_nr_other_sib(module_idP, frame, slot, &sched_info->DL_req, &sched_info->TX_req);
+      schedule_nr_pcch(gNB, frame, slot, &sched_info->DL_req, &sched_info->TX_req);
     }
   }
 
@@ -205,7 +206,7 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP, frame_t frame, slot_t slo
   // Schedule CSI measurement reporting
   nr_csi_meas_reporting(module_idP, frame, slot);
 
-  nr_schedule_srs(module_idP, frame, slot);
+  nr_schedule_periodic_srs(module_idP, frame, slot);
 
   // This schedule RA procedure if not in phy_test mode
   // Otherwise consider 5G already connected

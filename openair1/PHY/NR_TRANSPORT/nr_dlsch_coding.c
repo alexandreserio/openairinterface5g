@@ -115,6 +115,7 @@ int nr_dlsch_encoding(PHY_VARS_gNB *gNB,
     if (rel15->rnti != SI_RNTI) {
       ws_trace_t tmp = {.nr = true,
                         .direction = DIRECTION_DOWNLINK,
+                        .type = gNB->frame_parms.frame_type == FDD ? FDD_RADIO : TDD_RADIO,
                         .pdu_buffer = a,
                         .pdu_buffer_size = rel15->TBSize[0],
                         .ueid = 0,

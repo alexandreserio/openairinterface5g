@@ -103,6 +103,17 @@ bool init_mplane(ru_session_list_t *ru_session_list)
       memcpy(ru_session->ru_mplane_config.du_mac_addr[j], du_mac_addr[idx], strlen(du_mac_addr[idx]) + 1);
       ru_session->ru_mplane_config.vlan_tag[j] = vlan_tag[idx];
     }
+
+    // get compression parameters from the config file, if any
+    paramdef_t rup[] = ORAN_RU_DESC;
+    int nru = sizeofArray(rup);
+    int comp_type_idx = config_paramidx_fromname(rup, nru, ORAN_RU_COMP_HDR_TYPE);
+    AssertError(comp_type_idx >= 0, return false, "[MPLANE] Index for %s config option not found!\n", ORAN_RU_COMP_HDR_TYPE);
+    const paramdef_t *comp_type_pd = gpd(rup, nru, ORAN_RU_COMP_HDR_TYPE);
+    ru_session->xran_mplane.comp_hdr_type = comp_type_pd->paramflags & PARAMFLAG_PARAMSET ? config_get_processedint(config_get_if(), &rup[comp_type_idx]) : 1; // 0 -> XRAN_COMP_HDR_TYPE_DYNAMIC, 1 -> XRAN_COMP_HDR_TYPE_STATIC
+    const paramdef_t *iq_pd = gpd(rup, nru, ORAN_RU_CONFIG_IQWIDTH);
+    ru_session->xran_mplane.iq_width = iq_pd->paramflags & PARAMFLAG_PARAMSET ? *iq_pd->u8ptr : 255; // 255 if nothing set via config file
+    AssertError(ru_session->xran_mplane.iq_width <= 16 || ru_session->xran_mplane.iq_width == 255, return false, "[MPLANE] IQ bitwidth cannot be higher than 16.\n");
   }
 
   nc_client_init();

@@ -18,12 +18,15 @@ configmodule_interface_t *uniqCfg;
 
 void exit_function(const char *file, const char *function, const int line, const char *s, const int assert)
 {
+  UNUSED(assert);
   LOG_E(GNB_APP, "error at %s:%d:%s: %s\n", file, line, function, s);
   abort();
 }
 
 int nr_rlc_get_available_tx_space(const rnti_t rntiP, const logical_chan_id_t channel_idP)
 {
+  UNUSED(rntiP);
+  UNUSED(channel_idP);
   abort();
   return 0;
 }
@@ -144,6 +147,15 @@ static bool recv_basic_conn_qfi(protocol_ctxt_t *ctxt,
                                 const bool rqi,
                                 const int pdusession_id)
 {
+  UNUSED(ctxt);
+  UNUSED(flag);
+  UNUSED(mui);
+  UNUSED(confirm);
+  UNUSED(modeP);
+  UNUSED(sourceL2Id);
+  UNUSED(destinationL2Id);
+  UNUSED(rqi);
+  UNUSED(pdusession_id);
   EXPECT_EQ(ue_id, 1); // as defined in basic_conn_qfi
   EXPECT_EQ(qfi, 1);
   EXPECT_EQ(size, 3);
@@ -171,6 +183,14 @@ static bool recv_multi_qfi_same_pdu(protocol_ctxt_t *ctxt,
                                     const bool rqi,
                                     const int pdusession_id)
 {
+  UNUSED(ctxt);
+  UNUSED(flag);
+  UNUSED(mui);
+  UNUSED(confirm);
+  UNUSED(modeP);
+  UNUSED(sourceL2Id);
+  UNUSED(destinationL2Id);
+  UNUSED(rqi);
   EXPECT_EQ(ue_id, 7U);
   EXPECT_EQ(pdusession_id, 9);
   EXPECT_LT(recv_count_multi_qfi, expected_qfis_multi_qfi_count);
@@ -258,6 +278,13 @@ static bool recv_basic_conn(protocol_ctxt_t *ctxt,
                             const uint32_t *sourceL2Id,
                             const uint32_t *destinationL2Id)
 {
+  UNUSED(srb_flagP);
+  UNUSED(rb_idP);
+  UNUSED(muiP);
+  UNUSED(confirmP);
+  UNUSED(modeP);
+  UNUSED(sourceL2Id);
+  UNUSED(destinationL2Id);
   EXPECT_EQ(ctxt->rntiMaybeUEid, 12); // as defined in basic_conn
   EXPECT_EQ(size, 3);
   for (int i = 0; i < size; ++i)

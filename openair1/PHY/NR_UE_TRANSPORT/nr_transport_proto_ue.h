@@ -13,18 +13,7 @@
 #include <math.h>
 #include "PHY/nr_phy_common/inc/nr_phy_common.h"
 #include "PHY/CODING/nrPolar_tools/nr_polar_psbch_defs.h"
-
-#define NR_PUSCH_x 2 // UCI placeholder bit TS 38.212 V15.4.0 subclause 5.3.3.1
-#define NR_PUSCH_y 3 // UCI placeholder bit
-
-typedef enum {
-  BIT_TYPE_ULSCH = 0, // Default: UL-SCH data
-  BIT_TYPE_ACK = 1, // HARQ-ACK bit
-  BIT_TYPE_ACK_RESERVED = 2, // Reserved for HARQ-ACK (punctured)
-  BIT_TYPE_ACK_ULSCH = 3,
-  BIT_TYPE_CSI1 = 4, // CSI Part 1 bit
-  BIT_TYPE_CSI2 = 5 // CSI Part 2 bit
-} uci_on_pusch_bit_type_t;
+#include "common/utils/bits.h"
 
 // Specifies the data that should be copied to the scope during PDSCH RX
 typedef struct pdsch_scope_req_s {
@@ -100,22 +89,6 @@ int nr_ulsch_encoding(PHY_VARS_NR_UE *ue,
                       unsigned int *G,
                       int nb_ulsch,
                       uint8_t *ULSCH_ids);
-
-/*! \brief Perform PUSCH scrambling. TS 38.211 V15.4.0 subclause 6.3.1.1
-  @param[in] in Pointer to input bits
-  @param[in] size of input bits
-  @param[in] Nid cell id
-  @param[in] n_RNTI CRNTI
-  @param[in] uci_on_pusch whether UCI placeholder bits need to be scrambled (true -> no optimized scrambling)
-  @param[out] out the scrambled bits
-*/
-void nr_pusch_codeword_scrambling(uint8_t *in,
-                                  uint32_t size,
-                                  uint32_t Nid,
-                                  uint32_t n_RNTI,
-                                  bool uci_on_pusch,
-                                  const uci_on_pusch_bit_type_t *template,
-                                  uint32_t *out);
 
 /** \brief Alternative entry point to UE uplink shared channels procedures.
     It handles all the HARQ processes in only one call.
@@ -276,14 +249,15 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
                 int32_t *log2_maxh,
                 int rx_size_symbol,
                 int nbRx,
-                c16_t rxdataF_comp[][dlsch->cw_info.Nl][nbRx][rx_size_symbol],
-                c16_t dl_ch_mag[][dlsch->cw_info.Nl][nbRx][rx_size_symbol],
-                c16_t dl_ch_magb[][dlsch->cw_info.Nl][nbRx][rx_size_symbol],
-                c16_t dl_ch_magr[][dlsch->cw_info.Nl][nbRx][rx_size_symbol],
+                c16_t rxdataF_comp[][dlsch->cw_info.Nl][rx_size_symbol],
+                c16_t dl_ch_mag[][dlsch->cw_info.Nl][rx_size_symbol],
+                c16_t dl_ch_magb[][dlsch->cw_info.Nl][rx_size_symbol],
+                c16_t dl_ch_magr[][dlsch->cw_info.Nl][rx_size_symbol],
                 c16_t ptrs_phase_per_slot[][NR_SYMBOLS_PER_SLOT],
                 int32_t ptrs_re_per_slot[][NR_SYMBOLS_PER_SLOT],
                 uint32_t nvar,
-                pdsch_scope_req_t *scope_req);
+                pdsch_scope_req_t *scope_req,
+                c16_t rho_dl[][dlsch->cw_info.Nl * dlsch->cw_info.Nl][rx_size_symbol]);
 
 int32_t generate_nr_prach(PHY_VARS_NR_UE *ue, uint8_t gNB_id, int frame, uint8_t slot, c16_t **txData);
 void apply_ntn_config(PHY_VARS_NR_UE *UE,

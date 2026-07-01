@@ -31,6 +31,28 @@ void nr_ul_ri_tpmi_select_default(gNB_MAC_INST *mac, nr_ul_candidate_t *cands, i
   }
 }
 
+static NR_tda_info_t *get_new_tda_for_srs(gNB_MAC_INST *nrmac, const NR_tda_info_t *tda_info)
+{
+  // by current design, the next TDA would be the one for SRS with one less symbol
+  NR_tda_info_t *next = seq_arr_next(&nrmac->ul_tda, tda_info);
+  if (next == seq_arr_end(&nrmac->ul_tda))
+    return NULL;
+  AssertFatal(next->k2 == tda_info->k2,
+              "K2 in TDA information for SRS %ld doesn't match with current one %ld\n",
+              next->k2,
+              tda_info->k2);
+  AssertFatal(next->startSymbolIndex == tda_info->startSymbolIndex,
+              "startSymbolIndex in TDA information for SRS %d doesn't match with current one %d\n",
+              next->startSymbolIndex,
+              tda_info->startSymbolIndex);
+  AssertFatal(next->nrOfSymbols == tda_info->nrOfSymbols - 1,
+              "nrOfSymbols in TDA information for SRS %d should be 1 more than current one %d\n",
+              next->nrOfSymbols,
+              tda_info->nrOfSymbols);
+  return next;
+}
+
+
 /* Default UL TDA selector: picks the best TDA per candidate using each candidate's
  * allocated beam to check the correct VRB map. For retransmissions, reuses the original
  * TDA when it is among the valid candidates for this slot; otherwise falls back to the
@@ -89,11 +111,18 @@ int nr_ul_tda_select_default(gNB_MAC_INST *mac,
       cand->alloc_slbitmap = SL_to_bitmap(best->startSymbolIndex, best->nrOfSymbols);
       cand->retx_rbSize = needed;
     } else {
-      int tda = seq_arr_dist(&mac->ul_tda, seq_arr_front(&mac->ul_tda), best);
+      NR_tda_info_t *srs_best = NULL;
+      if (cand->sched_srs > 0) {
+        srs_best = get_new_tda_for_srs(mac, best);
+        if (!srs_best)
+          cand->sched_srs = 0;
+      }
+      const NR_tda_info_t *new_best = srs_best ? srs_best : best;
+      int tda = seq_arr_dist(&mac->ul_tda, seq_arr_front(&mac->ul_tda), new_best);
       AssertFatal(tda >= 0 && tda < 16, "illegal TDA index %d\n", tda);
       cand->sched_pusch.time_domain_allocation = tda;
-      cand->sched_pusch.tda_info = *best;
-      cand->alloc_slbitmap = SL_to_bitmap(best->startSymbolIndex, best->nrOfSymbols);
+      cand->sched_pusch.tda_info = *new_best;
+      cand->alloc_slbitmap = SL_to_bitmap(new_best->startSymbolIndex, new_best->nrOfSymbols);
     }
     n_valid++;
   }

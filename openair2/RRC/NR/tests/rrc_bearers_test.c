@@ -15,12 +15,19 @@
 #include "common/utils/LOG/log.h"
 #include "common/5g_platform_types.h"
 
-int nr_rlc_get_available_tx_space(int module_id, int rnti, int drb_id) { return 0; }
+int nr_rlc_get_available_tx_space(int module_id, int rnti, int drb_id)
+{
+  UNUSED(module_id);
+  UNUSED(rnti);
+  UNUSED(drb_id);
+  return 0;
+}
 softmodem_params_t *get_softmodem_params(void) { return NULL; }
 configmodule_interface_t *uniqCfg = NULL;
 
 void exit_function(const char *file, const char *function, const int line, const char *s, const int assert)
 {
+  UNUSED(assert);
   printf("detected error at %s:%d:%s: %s\n", file, line, function, s);
   abort();
 }

@@ -108,6 +108,7 @@ void nr_fill_rx_indication(fapi_nr_rx_indication_t *rx_ind,
     case FAPI_NR_RX_PDU_TYPE_SIB:
     case FAPI_NR_RX_PDU_TYPE_RAR:
     case FAPI_NR_RX_PDU_TYPE_DLSCH:
+    case FAPI_NR_RX_PDU_TYPE_PCCH:
       if(dlsch) {
         NR_DL_UE_HARQ_t *dl_harq = &ue->dl_harq_processes[cw_idx][harq_pid];
         rx->pdsch_pdu.harq_pid = harq_pid;
@@ -121,8 +122,11 @@ void nr_fill_rx_indication(fapi_nr_rx_indication_t *rx_ind,
             t = WS_RA_RNTI;
           if (pdu_type == FAPI_NR_RX_PDU_TYPE_SIB)
             t = WS_SI_RNTI;
+          if (pdu_type == FAPI_NR_RX_PDU_TYPE_PCCH)
+            t = WS_P_RNTI;
           ws_trace_t tmp = {.nr = true,
                             .direction = DIRECTION_DOWNLINK,
+                            .type = ue->frame_parms.frame_type == FDD ? FDD_RADIO : TDD_RADIO,
                             .pdu_buffer = b,
                             .pdu_buffer_size = rx->pdsch_pdu.pdu_length,
                             .ueid = 0,
@@ -474,14 +478,7 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
 
   const uint32_t rx_size_symbol = (freq_alloc->num_rbs * NR_NB_SC_PER_RB + 15) & ~15;
   fourDimArray_t *toFree2 = NULL;
-  allocCast4D(rxdataF_comp,
-              c16_t,
-              toFree2,
-              ue->frame_parms.symbols_per_slot,
-              dlsch->cw_info.Nl,
-              ue->frame_parms.nb_antennas_rx,
-              rx_size_symbol,
-              false);
+  allocCast3D(rxdataF_comp, c16_t, toFree2, ue->frame_parms.symbols_per_slot, dlsch->cw_info.Nl, rx_size_symbol, false);
 
   uint32_t nvar = 0;
 
@@ -527,7 +524,8 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
                              dlschCfg->start_symbol,
                              dlschCfg->dlDmrsSymbPos,
                              freq_alloc->num_rbs,
-                             dlsch->cw_info.Nl);
+                             dlsch->cw_info.Nl,
+                             ue->frame_parms.nb_antennas_rx);
   }
 
   uint16_t first_symbol_with_data = dlschCfg->start_symbol;
@@ -564,32 +562,19 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
                                                          &mt);
   }
   fourDimArray_t *toFree3 = NULL;
-  allocCast4D(dl_ch_mag,
-              c16_t,
-              toFree3,
-              NR_SYMBOLS_PER_SLOT,
-              dlsch->cw_info.Nl,
-              ue->frame_parms.nb_antennas_rx,
-              rx_size_symbol,
-              false);
+  allocCast3D(dl_ch_mag, c16_t, toFree3, NR_SYMBOLS_PER_SLOT, dlsch->cw_info.Nl, rx_size_symbol, false);
   fourDimArray_t *toFree4 = NULL;
-  allocCast4D(dl_ch_magb,
-              c16_t,
-              toFree4,
-              NR_SYMBOLS_PER_SLOT,
-              dlsch->cw_info.Nl,
-              ue->frame_parms.nb_antennas_rx,
-              rx_size_symbol,
-              false);
+  allocCast3D(dl_ch_magb, c16_t, toFree4, NR_SYMBOLS_PER_SLOT, dlsch->cw_info.Nl, rx_size_symbol, false);
   fourDimArray_t *toFree5 = NULL;
-  allocCast4D(dl_ch_magr,
-              c16_t,
-              toFree5,
-              NR_SYMBOLS_PER_SLOT,
-              dlsch->cw_info.Nl,
-              ue->frame_parms.nb_antennas_rx,
-              rx_size_symbol,
-              false);
+  allocCast3D(dl_ch_magr, c16_t, toFree5, NR_SYMBOLS_PER_SLOT, dlsch->cw_info.Nl, rx_size_symbol, false);
+  fourDimArray_t *toFreeRho = NULL;
+  const bool need_rho = ue->do_ml && dlsch->cw_info.Nl == 2 && dlsch->cw_info.qamModOrder <= 6;
+  c16_t(*rho_dl)[dlsch->cw_info.Nl * dlsch->cw_info.Nl][rx_size_symbol] = NULL;
+  if (need_rho) {
+    allocCast3D(rho_dl_buf, c16_t, toFreeRho, NR_SYMBOLS_PER_SLOT, dlsch->cw_info.Nl * dlsch->cw_info.Nl, rx_size_symbol, false);
+    rho_dl = rho_dl_buf;
+  }
+
   for (int m = dlschCfg->start_symbol; m < (dlschCfg->number_symbols + dlschCfg->start_symbol); m++) {
     bool first_symbol_flag = false;
     if (m == first_symbol_with_data)
@@ -621,7 +606,8 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
                     ptrs_phase_per_slot,
                     ptrs_re_per_slot,
                     nvar,
-                    &scope_req)
+                    &scope_req,
+                    rho_dl)
         < 0) {
       if (scope_req.copy_chanest_to_scope) {
         UEunlockScopeData(ue, pdschChanEstimates);
@@ -644,6 +630,7 @@ static int nr_ue_pdsch_procedures(PHY_VARS_NR_UE *ue,
   free(toFree3);
   free(toFree4);
   free(toFree5);
+  free(toFreeRho);
   return 0;
 }
 
@@ -751,6 +738,9 @@ static void nr_ue_dlsch_procedures(PHY_VARS_NR_UE *ue,
       break;
     case TYPE_C_RNTI_:
       ind_type = FAPI_NR_RX_PDU_TYPE_DLSCH;
+      break;
+    case TYPE_P_RNTI_:
+      ind_type = FAPI_NR_RX_PDU_TYPE_PCCH;
       break;
     default:
       AssertFatal(false, "Invalid DLSCH type %d\n", dlsch->rnti_type);

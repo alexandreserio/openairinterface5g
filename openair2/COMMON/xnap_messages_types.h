@@ -8,6 +8,7 @@
 #include "common/5g_platform_types.h"
 #include "common/utils/ds/byte_array.h"
 #include "common/platform_types.h"
+#include "common/platform_constants.h"
 
 typedef struct {
   // PLMN Identity (M)
@@ -291,5 +292,162 @@ typedef struct {
   uint8_t num_last_visited_cells;
   ue_history_info_t *ue_history_info;
 } xnap_handover_req_t;
+
+/* QoS Flows Admitted Item */
+typedef struct {
+  // QoS Flow Identifier
+  uint8_t qfi;
+} xnap_qos_admitted_item_t;
+
+/* 3GPP TS 38.423 9.2.1.2 – PDU Session Resources Admitted Item */
+typedef struct {
+  // PDU Session ID
+  uint8_t pdusession_id;
+  // QoS Flows Admitted List
+  uint8_t num_qos;
+  xnap_qos_admitted_item_t *qos_list;
+} xnap_pdusession_admitted_item_t;
+
+/* 3GPP TS 38.423 9.1.1.2 – Handover Request Acknowledge */
+typedef struct {
+  // Source NG-RAN node UE XnAP ID (M)
+  uint32_t s_ng_node_ue_xnap_id;
+  // Target NG-RAN node UE XnAP ID (M)
+  uint32_t t_ng_node_ue_xnap_id;
+  // PDU Session Resources Admitted List (M)
+  uint8_t num_pdu_admitted;
+  xnap_pdusession_admitted_item_t *pdusession_admitted_list;
+  // Target NG-RAN node To Source NG-RAN node Transparent Container (M)
+  // (3GPP TS 38.331 11.2.2 HandoverCommand message )
+  byte_array_t target2source;
+} xnap_handover_req_ack_t;
+
+/* 3GPP TS 38.423 9.1.1.3 – Handover Preparation Failure */
+typedef struct {
+  // Source NG-RAN node UE XnAP ID (M) //
+  uint32_t s_ng_node_ue_xnap_id;
+  // Cause (M)
+  xnap_cause_t cause;
+} xnap_handover_preparation_failure_t;
+
+/** 3GPP TS 38.423 – 9.1.1.4 SN Status Transfer 
+ * COUNT value used for both UL and DL PDCP SN + HFN (12-bit or 18-bit SN) */
+
+// Indicates PDCP SN length
+typedef enum { XNAP_SN_LENGTH_12 = 0, XNAP_SN_LENGTH_18 = 1 } xnap_sn_length_t;
+
+/* 3GPP TS 38.423 9.2.3.37 – COUNT Value for PDCP */
+typedef struct {
+  // PDCP Sequence Number (M)
+  uint32_t pdcp_sn;
+  // Hyper Frame Number (M)
+  uint32_t hfn;
+  // SN length
+  xnap_sn_length_t sn_len;
+} xnap_drb_count_value_t;
+
+/* 3GPP TS 38.423 9.2.1.14 – DRBs Subject To Status Transfer Item */
+typedef struct {
+  // DRB ID (M)
+  uint8_t drb_id;
+  // UL COUNT value (M)
+  xnap_drb_count_value_t ul_count;
+  // DL COUNT value (M)
+  xnap_drb_count_value_t dl_count;
+} xnap_drb_status_t;
+
+/* DRBs Subject To Status Transfer List */
+typedef struct {
+  // Number of DRBs in the list
+  uint8_t nb_drb;
+  // DRB Status List
+  xnap_drb_status_t drb_status_list[MAX_DRBS_PER_UE];
+} xnap_ran_status_container_t;
+
+/* 3GPP TS 38.423 9.1.1.4 – SN Status Transfer */
+typedef struct {
+  // Source NG-RAN node UE XnAP ID (M)
+  uint32_t s_ng_node_ue_xnap_id;
+  // Target NG-RAN node UE XnAP ID (M)
+  uint32_t t_ng_node_ue_xnap_id;
+  // DRBs Subject To Status Transfer List (M)
+  xnap_ran_status_container_t ran_status;
+} xnap_sn_status_transfer_t;
+
+/* 3GPP TS 38.423 9.1.1.5 – UE CONTEXT RELEASE */
+typedef struct {
+  /* Source NG-RAN node UE XnAP ID (M) */
+  uint32_t s_ng_node_ue_xnap_id;
+  /* Target NG-RAN node UE XnAP ID (M) */
+  uint32_t t_ng_node_ue_xnap_id;
+} xnap_ue_context_release_t;
+
+/* 3GPP TS 38.423 9.1.1.6 – Handover Cancel */
+typedef struct {
+  /* Source NG-RAN node UE XnAP ID (M) */
+  uint32_t s_ng_node_ue_xnap_id;
+  /* Cause (M) */
+  xnap_cause_t cause;
+} xnap_handover_cancel_t;
+
+/* 3GPP TS 38.423 9.1.1.12 – Handover Success */
+typedef struct {
+  /* Source NG-RAN node UE XnAP ID (M) */
+  uint32_t s_ng_node_ue_xnap_id;
+  /* Target NG-RAN node UE XnAP ID (M) */
+  uint32_t t_ng_node_ue_xnap_id;
+  /* Requested Target Cell Global ID (M) */
+  xnap_ngran_cgi_t target_cgi;
+} xnap_handover_success_t;
+
+/* 3GPP TS 38.423 9.2.3.66 – Paging DRX */
+typedef enum {
+  XNAP_PAGING_DRX_32 = 0,
+  XNAP_PAGING_DRX_64,
+  XNAP_PAGING_DRX_128,
+  XNAP_PAGING_DRX_256,
+  XNAP_PAGING_DRX_512,
+  XNAP_PAGING_DRX_1024,
+} xnap_paging_drx_t;
+
+typedef enum {
+  XNAP_RAN_PAGING_AREA_CELL_LIST = 0,
+  XNAP_RAN_PAGING_AREA_RAN_AREA_ID,
+} xnap_ran_paging_area_choice_t;
+
+/* RAN Area ID entry: TAC (M) + optional RANAC */
+typedef struct {
+  uint32_t tac;        /* 24-bit Tracking Area Code (M) */
+  bool ranac_present;
+  uint8_t ranac;       /* RAN Area Code 0..255 (O) */
+} xnap_ran_area_id_t;
+
+/* 3GPP TS 38.423 9.2.3.38 – RAN Paging Area */
+typedef struct {
+  plmn_id_t plmn;
+  xnap_ran_paging_area_choice_t choice;
+  union {
+    struct {
+      uint8_t num_cells;
+      uint64_t *cell_ids; /* NR-Cell-Identity, 36-bit values */
+    };
+    struct {
+      uint8_t num_ran_area_ids;
+      xnap_ran_area_id_t *ran_area_ids;
+    };
+  };
+} xnap_ran_paging_area_t;
+
+/* 3GPP TS 38.423 9.1.1.7 – RAN Paging */
+typedef struct {
+  /* UE Identity Index Value – 10-bit index (M) */
+  uint16_t ue_identity_index_value;
+  /* UE RAN Paging Identity – I-RNTI, 40-bit (M) */
+  uint64_t ue_ran_paging_identity;
+  /* Paging DRX (M) */
+  xnap_paging_drx_t paging_drx;
+  /* RAN Paging Area (M) */
+  xnap_ran_paging_area_t ran_paging_area;
+} xnap_ran_paging_t;
 
 #endif /* XNAP_MESSAGES_TYPES_H_ */

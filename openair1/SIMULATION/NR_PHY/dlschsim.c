@@ -31,12 +31,12 @@
 #include "openair2/LAYER2/NR_MAC_COMMON/nr_mac_common.h"
 #include "executables/nr-uesoftmodem.h"
 #include "nfapi/oai_integration/vendor_ext.h"
+#include "openair1/PHY/phy_extern_nr_ue.h"
 
 //#define DEBUG_NR_DLSCHSIM
 
 THREAD_STRUCT thread_struct;
 PHY_VARS_gNB *gNB;
-PHY_VARS_NR_UE *UE;
 RAN_CONTEXT_t RC;
 UE_nr_rxtx_proc_t proc;
 int64_t uplink_frequency_offset[MAX_NUM_CCs][4];
@@ -46,7 +46,7 @@ double cpuf;
 
 uint8_t const nr_rv_round_map[4] = {0, 2, 3, 1};
 // needed for some functions
-PHY_VARS_NR_UE *PHY_vars_UE_g[1][1] = { { NULL } };
+PHY_VARS_NR_UE ***nrPHY_vars_UE_g;
 uint16_t n_rnti = 0x1234;
 static softmodem_params_t softmodem_params;
 softmodem_params_t *get_softmodem_params(void) {
@@ -390,10 +390,13 @@ int main(int argc, char **argv)
 	}
 
 	//configure UE
-	UE = calloc(1, sizeof(*UE));
-	memcpy(&UE->frame_parms, frame_parms, sizeof(NR_DL_FRAME_PARMS));
+  PHY_VARS_NR_UE *UE = calloc(1, sizeof(*UE));
+  PHY_VARS_NR_UE **uedata_ptrr = &UE;
+  nrPHY_vars_UE_g = &uedata_ptrr;
 
-	//phy_init_nr_top(frame_parms);
+  memcpy(&UE->frame_parms, frame_parms, sizeof(NR_DL_FRAME_PARMS));
+
+  //phy_init_nr_top(frame_parms);
 	if (init_nr_ue_signal(UE, 1) != 0) {
 		printf("Error at UE NR initialisation\n");
 		exit(-1);

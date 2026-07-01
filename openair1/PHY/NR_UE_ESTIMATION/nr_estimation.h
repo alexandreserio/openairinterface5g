@@ -5,7 +5,7 @@
 #ifndef __NR_ESTIMATION_DEFS__H__
 #define __NR_ESTIMATION_DEFS__H__
 
-#include "PHY/nr_phy_common/inc/nr_phy_common.h"
+#include "common/utils/bits.h"
 #include "PHY/defs_nr_UE.h"
 
 /** @addtogroup _PHY_PARAMETER_ESTIMATION_BLOCKS_
@@ -119,7 +119,7 @@ void nr_pdsch_ptrs_processing(int nbRx,
                               int32_t ptrs_re_per_slot[][14],
                               uint32_t rx_size_symbol,
                               int nl,
-                              c16_t rxdataF_comp[][nl][nbRx][rx_size_symbol],
+                              c16_t rxdataF_comp[][nl][rx_size_symbol],
                               NR_DL_FRAME_PARMS *frame_parms,
                               fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config,
                               uint8_t nr_slot_rx,

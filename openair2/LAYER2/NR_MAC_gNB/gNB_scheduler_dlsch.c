@@ -820,6 +820,7 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
       sched_pdsch.Qm = harq_pdsch.Qm;
       sched_pdsch.tb_size = harq_pdsch.tb_size;
       sched_pdsch.dl_harq_pid = cand->retx_harq_pid;
+      sched_pdsch.ant_port_idx = harq_pdsch.ant_port_idx;
       bool tda_changed = sched_pdsch.tda_info.startSymbolIndex != harq_pdsch.tda_info.startSymbolIndex
                          || sched_pdsch.tda_info.nrOfSymbols != harq_pdsch.tda_info.nrOfSymbols;
       if (tda_changed)
@@ -857,6 +858,14 @@ static void nr_dl_schedule(gNB_MAC_INST *mac,
       int srb1 = 1;
       if (UE->reconfigCellGroup && sched_ctrl->rlc_status[srb1].bytes_in_buffer > 10)
         sched_pdsch.action = ack_reconfig;
+
+      // Map antenna ports for this UE
+      const nr_pdsch_AntennaPorts_t *p = &mac->radio_config.pdsch_AntennaPorts;
+      const uint16_t num_log_ports = p->XP * p->N1 * p->N2;
+      sched_pdsch.ant_port_idx.numSpatialStreamIndices = num_log_ports;
+      const int start_stream_idx = cand->alloc_beam_idx * num_log_ports;
+      for (int i = 0; i < sched_pdsch.ant_port_idx.numSpatialStreamIndices;i++)
+        sched_pdsch.ant_port_idx.spatialStreamIndices[i] = mac->radio_config.spatial_stream_index[start_stream_idx + i];
     }
 
     post_process_dlsch(mac, pp_pdsch, UE, &sched_pdsch, cand);
@@ -955,12 +964,16 @@ nfapi_nr_dl_tti_pdsch_pdu_rel15_t *prepare_pdsch_pdu(nfapi_nr_dl_tti_request_pdu
   int dl_bw_tbslbrm = UE ? UE->sc_info.dl_bw_tbslbrm : sched_pdsch->bwp_info.bwpSize;
   pdsch_pdu->maintenance_parms_v3.tbSizeLbrmBytes = nr_compute_tbslbrm(pdsch_pdu->mcsTable[0], dl_bw_tbslbrm, nl_tbslbrm);
   pdsch_pdu->maintenance_parms_v3.ldpcBaseGraph = get_BG(sched_pdsch->tb_size << 3, sched_pdsch->R);
+  // MU-MIMO port mapping info
+  pdsch_pdu->param_v4.numberCodewords = pdsch_pdu->NrOfCodewords;
+  memcpy(&pdsch_pdu->param_v4.spatialStreamsCw[0], &sched_pdsch->ant_port_idx, sizeof(*pdsch_pdu->param_v4.spatialStreamsCw));
   // Precoding and beamforming
   pdsch_pdu->precodingAndBeamforming.num_prgs = 1;
   pdsch_pdu->precodingAndBeamforming.prg_size = pdsch_pdu->rbSize;
-  pdsch_pdu->precodingAndBeamforming.dig_bf_interfaces = 1;
-  pdsch_pdu->precodingAndBeamforming.prgs_list[0].pm_idx = sched_pdsch->pm_index; 
-  pdsch_pdu->precodingAndBeamforming.prgs_list[0].dig_bf_interface_list[0].beam_idx = beam_index;
+  pdsch_pdu->precodingAndBeamforming.prgs_list[0].pm_idx = sched_pdsch->pm_index;
+  pdsch_pdu->precodingAndBeamforming.dig_bf_interfaces = pdsch_pdu->param_v4.spatialStreamsCw[0].numSpatialStreamIndices;
+  for (int i = 0; i < pdsch_pdu->param_v4.spatialStreamsCw[0].numSpatialStreamIndices; i++)
+    pdsch_pdu->precodingAndBeamforming.prgs_list[0].dig_bf_interface_list[i].beam_idx = beam_index;
   return pdsch_pdu;
 }
 
@@ -1079,44 +1092,24 @@ static void generate_dl_mac_pdu(gNB_MAC_INST *mac,
         if (lcid_alloc[lcid] == 0)
           continue;
 
+        tb_size_t pdu_siz[MAX_NUM_DATA_REQ];
+        int num = nr_mac_rlc_multi_data_req(module_id, rnti, true, lcid, bufEnd - buf, (char *)buf, pdu_siz, sizeofArray(pdu_siz));
+        DevAssert(num <= sizeofArray(pdu_siz));
+
+        sdus += num;
         int lcid_bytes = 0;
-        int lcid_remaining = lcid_alloc[lcid];
-        while (bufEnd - buf > sizeof(NR_MAC_SUBHEADER_LONG) + 1 && lcid_remaining > 0) {
-          NR_MAC_SUBHEADER_LONG *header = (NR_MAC_SUBHEADER_LONG *)buf;
-          const rlc_buffer_occupancy_t ndata = min(lcid_remaining, bufEnd - buf - sizeof(NR_MAC_SUBHEADER_LONG));
-          tbs_size_t len = nr_mac_rlc_data_req(module_id, rnti, true, lcid, ndata, (char *)buf + sizeof(NR_MAC_SUBHEADER_LONG));
-          LOG_D(NR_MAC,
-                "%4d.%2d RNTI %04x: %d bytes from %s %d (ndata %d, remaining size %ld)\n",
-                frame,
-                slot,
-                rnti,
-                len,
-                lcid < 4 ? "DCCH" : "DTCH",
-                lcid,
-                ndata,
-                bufEnd - buf - sizeof(NR_MAC_SUBHEADER_LONG));
-
-          if (len == 0)
-            break;
-
-          T(T_GNB_MAC_LCID_DL,
-            T_INT(rnti),
-            T_INT(frame),
-            T_INT(slot),
-            T_INT(lcid),
-            T_INT(len * 8),
-            T_INT(nr_rlc_tx_list_occupancy(rnti, lcid)));
+        for (int j = 0; j < num; ++j) {
+          NR_MAC_SUBHEADER_LONG *header = (NR_MAC_SUBHEADER_LONG *) buf;
           header->R = 0;
           header->F = 1;
           header->LCID = lcid;
-          header->L = htons(len);
-          buf += len + sizeof(NR_MAC_SUBHEADER_LONG);
-          dlsch_total_bytes += len;
-          lcid_bytes += len;
-          lcid_remaining -= len;
-          sdus += 1;
+          header->L = htons(pdu_siz[j]);
+          buf += pdu_siz[j] + sizeof(NR_MAC_SUBHEADER_LONG);
+          dlsch_total_bytes += pdu_siz[j];
+          lcid_bytes += pdu_siz[j];
         }
 
+        T(T_GNB_MAC_LCID_DL, T_INT(rnti), T_INT(frame), T_INT(slot), T_INT(lcid), T_INT(lcid_bytes), T_INT(nr_rlc_tx_list_occupancy(rnti, lcid)));
         UE->mac_stats.dl.lc_bytes[lcid] += lcid_bytes;
       }
     } else if (get_softmodem_params()->phy_test || get_softmodem_params()->do_ra) {
@@ -1327,6 +1320,7 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac,
                                                    scc,
                                                    sched_ctrl->search_space,
                                                    sched_ctrl->coreset,
+                                                   sched_pdsch->ant_port_idx.spatialStreamIndices,
                                                    sched_ctrl->aggregation_level,
                                                    sched_ctrl->cce_index,
                                                    fapi_beam,
@@ -1378,6 +1372,7 @@ void post_process_dlsch(gNB_MAC_INST *nr_mac,
                      &dci_payload,
                      current_BWP->dci_format,
                      rnti_type,
+                     0,
                      sched_ctrl->search_space,
                      sched_ctrl->coreset,
                      UE->pdsch_HARQ_ACK_Codebook,

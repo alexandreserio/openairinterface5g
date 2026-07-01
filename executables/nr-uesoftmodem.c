@@ -29,6 +29,7 @@
 #include "NR_IF_Module.h"
 #include "openair1/SIMULATION/TOOLS/sim.h"
 #include "openair2/RRC/NR_UE/L2_interface_ue.h"
+#include "openair1/PHY/phy_extern_nr_ue.h"
 
 #ifdef SMBV
 #include "PHY/TOOLS/smbv.h"
@@ -66,10 +67,6 @@ unsigned short config_frames[4] = {2,9,11,13};
 
 THREAD_STRUCT thread_struct;
 nrUE_params_t nrUE_params = {0};
-
-// not used in UE
-instance_t CUuniqInstance=0;
-instance_t DUuniqInstance=0;
 
 int get_node_type() {return -1;}
 
@@ -266,13 +263,13 @@ int main(int argc, char **argv)
   char *pckg = strdup(OAI_PACKAGE_VERSION);
   LOG_I(HW, "Version: %s\n", pckg);
 
-  PHY_vars_UE_g = calloc_or_fail(NB_UE_INST, sizeof(*PHY_vars_UE_g));
+  nrPHY_vars_UE_g = calloc_or_fail(NB_UE_INST, sizeof(*nrPHY_vars_UE_g));
   for (int inst = 0; inst < NB_UE_INST; inst++) {
-    PHY_vars_UE_g[inst] = calloc_or_fail(MAX_NUM_CCs, sizeof(*PHY_vars_UE_g[inst]));
+    nrPHY_vars_UE_g[inst] = calloc_or_fail(MAX_NUM_CCs, sizeof(*nrPHY_vars_UE_g[inst]));
     for (int CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {
-      PHY_vars_UE_g[inst][CC_id] = calloc_or_fail(1, sizeof(*PHY_vars_UE_g[inst][CC_id]));
+      nrPHY_vars_UE_g[inst][CC_id] = calloc_or_fail(1, sizeof(*nrPHY_vars_UE_g[inst][CC_id]));
       // All instances use the same coding interface
-      PHY_vars_UE_g[inst][CC_id]->nrLDPC_coding_interface = nrLDPC_coding_interface;
+      nrPHY_vars_UE_g[inst][CC_id]->nrLDPC_coding_interface = nrLDPC_coding_interface;
     }
   }
 
@@ -333,7 +330,7 @@ int main(int argc, char **argv)
     NR_UE_MAC_INST_t *mac = get_mac_inst(inst);
 
     for (int CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {
-      PHY_VARS_NR_UE *UE_CC = PHY_vars_UE_g[inst][CC_id];
+      PHY_VARS_NR_UE *UE_CC = nrPHY_vars_UE_g[inst][CC_id];
 
       AssertFatal(cell_id >= 0 && cell_id < nrue_get_cell_count(),
                   "There are not enough cell definitions for all UEs! NB_UE_INST = %d, MAX_NUM_CCs = %d, nrue_cell_count = %d\n",
@@ -419,15 +416,15 @@ int main(int argc, char **argv)
   lock_memory_to_ram();
 
   if (IS_SOFTMODEM_DOSCOPE) {
-    load_softscope("nr", PHY_vars_UE_g[0][0]);
+    load_softscope("nr", nrPHY_vars_UE_g[0][0]);
   }
   if (IS_SOFTMODEM_IMSCOPE_ENABLED) {
-    load_softscope("im", PHY_vars_UE_g[0][0]);
+    load_softscope("im", nrPHY_vars_UE_g[0][0]);
   }
   AssertFatal(!(IS_SOFTMODEM_IMSCOPE_ENABLED && IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED),
               "Data recoding and ImScope cannot be enabled at the same time\n");
   if (IS_SOFTMODEM_IMSCOPE_RECORD_ENABLED) {
-    load_module_shlib("imscope_record", NULL, 0, PHY_vars_UE_g[0][0]);
+    load_module_shlib("imscope_record", NULL, 0, nrPHY_vars_UE_g[0][0]);
   }
 
   // Launch a temporary high-priority thread to start the UE RU, ensuring radio library threads inherit this priority
@@ -438,7 +435,7 @@ int main(int argc, char **argv)
 
   for (int inst = 0; inst < NB_UE_INST; inst++) {
     LOG_I(PHY,"Intializing UE Threads for instance %d ...\n", inst);
-    init_NR_UE_threads(PHY_vars_UE_g[inst][0]);
+    init_NR_UE_threads(nrPHY_vars_UE_g[inst][0]);
   }
 
   // wait for end of program
@@ -458,9 +455,9 @@ int main(int argc, char **argv)
 
   nrue_ru_stop();
 
-  if (PHY_vars_UE_g && PHY_vars_UE_g[0]) {
+  if (nrPHY_vars_UE_g && nrPHY_vars_UE_g[0]) {
     for (int CC_id = 0; CC_id < MAX_NUM_CCs; CC_id++) {
-      PHY_VARS_NR_UE *phy_vars = PHY_vars_UE_g[0][CC_id];
+      PHY_VARS_NR_UE *phy_vars = nrPHY_vars_UE_g[0][CC_id];
       if (phy_vars) {
         for (int i = 0; i < get_nrUE_params()->num_ul_actors; i++) {
           shutdown_actor(&phy_vars->ul_actors[i]);

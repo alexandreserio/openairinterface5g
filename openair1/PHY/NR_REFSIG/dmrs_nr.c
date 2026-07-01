@@ -242,7 +242,8 @@ void nr_chest_time_domain_avg(NR_DL_FRAME_PARMS *frame_parms,
                               uint8_t start_symbol,
                               uint16_t dmrs_bitmap,
                               uint16_t num_rbs,
-                              uint8_t nb_layers)
+                              uint8_t nb_layers,
+                              uint8_t num_streams)
 {
   simde__m128i *ul_ch128_0;
   simde__m128i *ul_ch128_1;
@@ -252,8 +253,8 @@ void nr_chest_time_domain_avg(NR_DL_FRAME_PARMS *frame_parms,
   int first_dmrs_symb = get_next_dmrs_symbol_in_slot(dmrs_bitmap, start_symbol, total_symbols);
   AssertFatal(first_dmrs_symb > -1, "No DMRS symbol present in this slot\n");
   for (int nl = 0; nl < nb_layers; nl++) {
-    for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
-      int ch_offset = nl * frame_parms->nb_antennas_rx + aarx;
+    for (int aarx = 0; aarx < num_streams; aarx++) {
+      int ch_offset = nl * num_streams + aarx;
       for (int symb = first_dmrs_symb + 1; symb < total_symbols; symb++) {
         ul_ch128_0 = (simde__m128i *)&ch_estimates[ch_offset][first_dmrs_symb * frame_parms->ofdm_symbol_size];
         if ((dmrs_bitmap >> symb) & 0x01) {

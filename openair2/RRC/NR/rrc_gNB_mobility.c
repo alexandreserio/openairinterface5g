@@ -6,8 +6,6 @@
 
 #include "assertions.h"
 
-#include "rrc_gNB_mobility.h"
-
 #include "nr_rrc_proto.h"
 #include "rrc_gNB_du.h"
 #include "rrc_cell_management.h"
@@ -22,6 +20,7 @@
 #include "openair2/RRC/NR/rrc_gNB_NGAP.h"
 #include "NR_DL-DCCH-MessageType.h"
 #include "rrc_cell_management.h"
+#include "openair2/RRC/NR/rrc_gNB_mobility.h"
 
 #ifdef E2_AGENT
 #include "openair2/E2AP/RAN_FUNCTION/O-RAN/ran_func_rc_extern.h"
@@ -600,9 +599,6 @@ void nr_rrc_trigger_n2_ho(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue, const nr_neighbou
   rrc_gNB_send_NGAP_HANDOVER_REQUIRED(rrc, ue, neighbour_config, hoPrepInfo);
   free_byte_array(hoPrepInfo);
 }
-
-extern const nr_neighbour_cell_t *get_neighbour_cell_by_pci(const neighbour_cell_configuration_t *cell, int pci);
-extern const neighbour_cell_configuration_t *get_neighbour_cell_config(const gNB_RRC_INST *rrc, int cell_id);
 
 void nr_HO_N2_trigger_telnet(gNB_RRC_INST *rrc, uint32_t neighbour_pci, uint32_t rrc_ue_id)
 {

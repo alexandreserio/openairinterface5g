@@ -28,8 +28,6 @@
 #define CH_INTERP 0
 #define NO_INTERP 1
 
-extern openair0_config_t openair0_cfg[MAX_CARDS];
-
 /* Generic function to find the peak of channel estimation buffer */
 void peak_estimator(c16_t *buffer, int32_t buf_len, int32_t *peak_idx, int32_t *peak_val, int32_t mean_val)
 {
@@ -800,7 +798,7 @@ void nr_pdcch_channel_estimation(const PHY_VARS_NR_UE *ue,
 
   for (int aarx = 0; aarx < ue->frame_parms.nb_antennas_rx; aarx++) {
     int k = coreset_start_subcarrier;
-    c16_t *pil = &pilot[dmrs_ref * 3];
+    c16_t *pil = &pilot[(dmrs_ref + coreset_start_rb) * 3];
     c16_t *rxF = &rxdataF[aarx][k + 1];
     c16_t *dl_ch = pdcch_dl_ch_estimates[aarx];
 
@@ -1347,7 +1345,7 @@ void nr_pdsch_ptrs_processing(int nbRx,
                               int32_t ptrs_re_per_slot[][14],
                               uint32_t rx_size_symbol,
                               int nl,
-                              c16_t rxdataF_comp[][nl][nbRx][rx_size_symbol],
+                              c16_t rxdataF_comp[][nl][rx_size_symbol],
                               NR_DL_FRAME_PARMS *frame_parms,
                               fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_config,
                               uint8_t nr_slot_rx,
@@ -1371,7 +1369,7 @@ void nr_pdsch_ptrs_processing(int nbRx,
   int nscid = dlsch_config->nscid;
 
   /* loop over antennas */
-  for (int aarx = 0; aarx < frame_parms->nb_antennas_rx; aarx++) {
+  for (int aarx = 0; aarx < nbRx; aarx++) {
     c16_t *phase_per_symbol = (c16_t*)ptrs_phase_per_slot[aarx];
     ptrs_re_symbol = (int32_t*)ptrs_re_per_slot[aarx];
     ptrs_re_symbol[symbol] = 0;
@@ -1406,7 +1404,7 @@ void nr_pdsch_ptrs_processing(int nbRx,
                              nb_rb,
                              rnti,
                              frame_parms->ofdm_symbol_size,
-                             rxdataF_comp[symbol][0][aarx],
+                             rxdataF_comp[symbol][aarx],
                              gold,
                              (int16_t *)&phase_per_symbol[symbol],
                              &ptrs_re_symbol[symbol]);
@@ -1438,9 +1436,9 @@ void nr_pdsch_ptrs_processing(int nbRx,
 #ifdef DEBUG_DL_PTRS
           printf("[PHY][DL][PTRS]: Rotate Symbol %2d with  %d + j* %d\n", i, phase_per_symbol[i].r, phase_per_symbol[i].i);
 #endif
-          rotate_cpx_vector(rxdataF_comp[i][0][aarx], &phase_per_symbol[i], rxdataF_comp[i][0][aarx], nb_rb * NR_NB_SC_PER_RB, 15);
+          rotate_cpx_vector(rxdataF_comp[i][aarx], phase_per_symbol[i], rxdataF_comp[i][aarx], nb_rb * NR_NB_SC_PER_RB, 15);
         }// if not DMRS Symbol
       }// symbol loop
     }// last symbol check
-  }//Antenna loop
+  } // Antenna loop
 }//main function

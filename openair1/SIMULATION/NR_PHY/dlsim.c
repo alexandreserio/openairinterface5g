@@ -96,9 +96,6 @@ char *uecap_file;
 uint64_t downlink_frequency[MAX_NUM_CCs][4];
 THREAD_STRUCT thread_struct;
 nfapi_ue_release_request_body_t release_rntis;
-//Fixme: Uniq dirty DU instance, by global var, datamodel need better management
-instance_t DUuniqInstance=0;
-instance_t CUuniqInstance=0;
 
 // NTN cellSpecificKoffset-r17, but in slots for DL SCS
 unsigned int NTN_UE_Koffset = 0;
@@ -173,8 +170,7 @@ void processSlotTX(void *arg) {}
 // needed for some functions
 openair0_config_t openair0_cfg[MAX_CARDS];
 void update_ptrs_config(NR_CellGroupConfig_t *secondaryCellGroup, uint16_t *rbSize, uint8_t *mcsIndex,int8_t *ptrs_arg);
-void update_dmrs_config(NR_CellGroupConfig_t *scg, int8_t* dmrs_arg);
-extern void fix_scd(NR_ServingCellConfig_t *scd);// forward declaration
+void update_dmrs_config(NR_CellGroupConfig_t *scg, int8_t *dmrs_arg);
 
 /* specific dlsim DL preprocessor: uses rbStart/rbSize/mcs/nrOfLayers from command line of dlsim */
 int g_mcsIndex = -1, g_mcsTableIdx = 0, g_rbStart = -1, g_rbSize = -1, g_nrOfLayers = 1, g_pmi = 0;
@@ -249,6 +245,11 @@ void nr_dlsim_preprocessor(gNB_MAC_INST *nr_mac, post_process_pdsch_t *pp_pdsch)
                                         0 /* N_PRB_oh, 0 for initialBWP */,
                                         0 /* tb_scaling */,
                                         sched_pdsch.nrOfLayers) >> 3;
+
+  const nr_pdsch_AntennaPorts_t *p = &nr_mac->radio_config.pdsch_AntennaPorts;
+  sched_pdsch.ant_port_idx.numSpatialStreamIndices = p->XP * p->N1 * p->N2;
+  for (int i = 0; i < sched_pdsch.ant_port_idx.numSpatialStreamIndices;i++)
+    sched_pdsch.ant_port_idx.spatialStreamIndices[i] = nr_mac->radio_config.spatial_stream_index[i];
 
   /* the simulator assumes the HARQ PID is equal to the slot number */
   sched_pdsch.dl_harq_pid = pp_pdsch->slot;
@@ -408,6 +409,7 @@ int main(int argc, char **argv)
   randominit();
 
   int print_perf = 0;
+  bool do_ml = false;
 
   int use_cuda = 0;
 
@@ -420,7 +422,7 @@ int main(int argc, char **argv)
   void *d_channel_coeffs_gpu = NULL;
 #endif
 
-  while ((c = getopt(argc, argv, "--:O:f:hA:p:f:g:i:n:s:S:t:v:x:y:z:o:H:M:N:F:GR:d:PI:L:a:b:e:m:w:T:U:q:X:Y:Z:Q:")) != -1) {
+  while ((c = getopt(argc, argv, "--:O:f:hA:p:f:g:i:n:s:S:t:v:x:y:z:o:H:M:N:F:GR:d:PI:L:a:b:e:m:w:T:U:q:X:Y:Z:Q:E")) != -1) {
     /* ignore long options starting with '--', option '-O' and their arguments that are handled by configmodule */
     /* with this opstring getopt returns 1 for non-option arguments, refer to 'man 3 getopt' */
     if (c == 1 || c == '-' || c == 'O')
@@ -538,6 +540,10 @@ int main(int argc, char **argv)
 
       break;
 
+    case 'E':
+      do_ml = true;
+      break;
+
     case 'P':
       print_perf=1;
       cpu_meas_enabled = 1;
@@ -653,6 +659,7 @@ int main(int argc, char **argv)
       printf("-b Number of PRB for PDSCH\n");
       printf("-d number of dlsch threads, 0: no dlsch parallelization\n");
       printf("-e MSC index\n");
+      printf("-E Enable ML-based LLR for 2-layer MIMO (QPSK/16QAM/64QAM). Default: MMSE equalization\n");
       printf("-f <flag> Enable optional feature flag. Available flags:\n");
 #ifdef CHANNEL_SIM_CUDA
       printf("          cuda    Enable CUDA channel simulation\n");
@@ -785,7 +792,8 @@ int main(int argc, char **argv)
                                 .timer_config.t311 = 3000,
                                 .timer_config.n311 = 1,
                                 .timer_config.t319 = 400,
-                                .num_agg_level_candidates = {0, 0, 1, 1, 0}};
+                                .num_agg_level_candidates = {0, 0, 1, 1, 0},
+                                .spatial_stream_index = {0, 1, 2, 3}};
   const nr_rlc_configuration_t rlc_config = {
     .srb = {
       .t_poll_retransmit = 45,
@@ -814,13 +822,10 @@ int main(int argc, char **argv)
   RC.nb_nr_macrlc_inst = 1;
   mac_top_init_gNB(ngran_gNB, scc, &conf, &rlc_config);
   gNB_mac = RC.nrmac[0];
+  gNB_mac->beam_info = (NR_beam_info_t){.beams_per_period = 1};
   nr_mac_config_scc(RC.nrmac[0], scc, &conf);
 
   gNB_mac->dl_bler.harq_round_max = num_rounds;
-
-  gNB->ap_N1 = pdsch_AntennaPorts.N1;
-  gNB->ap_N2 = pdsch_AntennaPorts.N2;
-  gNB->ap_XP = pdsch_AntennaPorts.XP;
 
   validate_input_pmi(&gNB_mac->config[0], pdsch_AntennaPorts, g_nrOfLayers, g_pmi);
 
@@ -927,16 +932,16 @@ int main(int argc, char **argv)
 
 
   //configure UE
-  UE = malloc(sizeof(PHY_VARS_NR_UE));
-  memset((void*)UE,0,sizeof(PHY_VARS_NR_UE));
-  PHY_vars_UE_g = malloc(sizeof(PHY_VARS_NR_UE**));
-  PHY_vars_UE_g[0] = malloc(sizeof(PHY_VARS_NR_UE*));
-  PHY_vars_UE_g[0][0] = UE;
-  memcpy(&UE->frame_parms,frame_parms,sizeof(NR_DL_FRAME_PARMS));
+  UE = calloc(1, sizeof(PHY_VARS_NR_UE));
+  nrPHY_vars_UE_g = malloc(sizeof(PHY_VARS_NR_UE **));
+  nrPHY_vars_UE_g[0] = malloc(sizeof(PHY_VARS_NR_UE *));
+  nrPHY_vars_UE_g[0][0] = UE;
+  memcpy(&UE->frame_parms, frame_parms, sizeof(*frame_parms));
   UE->frame_parms.nb_antennas_rx = n_rx;
   UE->frame_parms.nb_antenna_ports_gNB = n_tx;
   UE->nrLDPC_coding_interface = gNB->nrLDPC_coding_interface;
   UE->max_ldpc_iterations = max_ldpc_iterations;
+  UE->do_ml = do_ml;
   init_nr_ue_phy_cpu_stats(&UE->phy_cpu_stats);
   UE->is_synchronized = 1;
 
@@ -1134,14 +1139,16 @@ int main(int argc, char **argv)
         stop_meas(&gNB->phy_proc_tx);
 
         if (n_trials==1) {
-          LOG_M("txsigF0.m","txsF0=",
-                &gNB->common_vars.txdataF[0][0][2 * frame_parms->ofdm_symbol_size],
+          LOG_M("txsigF0.m",
+                "txsF0=",
+                &gNB->common_vars.txdataF[0][2 * frame_parms->ofdm_symbol_size],
                 frame_parms->ofdm_symbol_size,
                 1,
                 1);
           if (gNB->frame_parms.nb_antennas_tx>1)
-            LOG_M("txsigF1.m","txsF1=",
-                  &gNB->common_vars.txdataF[0][1][2 * frame_parms->ofdm_symbol_size],
+            LOG_M("txsigF1.m",
+                  "txsF1=",
+                  &gNB->common_vars.txdataF[1][2 * frame_parms->ofdm_symbol_size],
                   frame_parms->ofdm_symbol_size,
                   1,
                   1);
@@ -1154,7 +1161,7 @@ int main(int argc, char **argv)
           c16_t fft_in_buff[frame_parms->ofdm_symbol_size * frame_parms->symbols_per_slot] __attribute__((aligned(64)));
           memset(fft_in_buff, 0, sizeof(fft_in_buff));
           if (cyclic_prefix_type == 1) {
-            fft_shift(gNB->common_vars.txdataF[0][aa],
+            fft_shift(gNB->common_vars.txdataF[aa],
                       frame_parms->ofdm_symbol_size,
                       frame_parms->N_RB_DL,
                       fft_in_buff,
@@ -1172,7 +1179,7 @@ int main(int argc, char **argv)
             for (int i = 0; i < 14; i++) {
               was_symbol_used[i] = true;
             }
-            fft_shift(gNB->common_vars.txdataF[0][aa],
+            fft_shift(gNB->common_vars.txdataF[aa],
                       frame_parms->ofdm_symbol_size,
                       frame_parms->N_RB_DL,
                       fft_in_buff,
@@ -1568,6 +1575,9 @@ int main(int argc, char **argv)
   free(UE->phy_sim_pdsch_dl_ch_estimates);
   free(UE->phy_sim_pdsch_dl_ch_estimates_ext);
   free(UE->phy_sim_dlsch_b);
+  free(UE);
+  free(nrPHY_vars_UE_g[0]);
+  free(nrPHY_vars_UE_g);
 
   free_nrLDPC_coding_interface(&gNB->nrLDPC_coding_interface);
 

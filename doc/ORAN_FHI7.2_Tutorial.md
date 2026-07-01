@@ -8,189 +8,220 @@
 
 ## Prerequisites
 
-The hardware on which we have tried this tutorial:
+Check the [supported hardware operating system guide](./Supported_Hardware_Operating_System.md)
+to know if you have the appropriate hardware for your testing requirements.
+This tutorial has been tested with following OS and kernels feel free to
+install one of the tested operating systems.
 
-|Hardware (CPU,RAM)                       |Operating System (kernel)                       |NIC (Vendor,Driver,Firmware)             |
-|-----------------------------------------|------------------------------------------------|-----------------------------------------|
-|Intel(R) Xeon(R) Gold 6354 36-Core, 128GB|RHEL 9.2 (5.14.0-284.18.1.rt14.303.el9_2.x86_64)|Intel X710, i40e, 9.20 0x8000d95e 22.0.9 |
-|Intel(R) Xeon(R) Gold 6354 36-Core, 128GB|Ubuntu 22.04.3 LTS (5.15.0-1033-realtime)       |Intel X710, i40e, 9.00 0x8000cfeb 21.5.9 |
-|AMD EPYC 9374F 32-Core Processor, 128GB  |Ubuntu 22.04.2 LTS (5.15.0-1038-realtime)       |Intel E810 ,ice, 4.00 0x8001184e 1.3236.0|
+|Operating System      | Kernel    |
+|----------------------|-----------|
+|Ubuntu 22.04/24.04    | 6.8/6.14  |
+|Red Hat 9.X           | 5.14      |
 
-**NOTE**: 
+**NOTE**:
 
-- These are not minimum hardware requirements. This is the configuration of our servers. 
-- The NIC card should support hardware PTP time stamping. 
-- If you are using Intel servers then use only Ice Lake or newer generations. In case of AMD use only 4th generation, Genoa or newer. 
-- If you try on any other server apart from the above listed, then choose a desktop/server with clock speed higher than 3.0 GHz and `avx512` capabilities. 
-- This tutorial gives few instructions for Arm targets, but DU execution on Arm systems is yet not functional.  
-This feature is intended to enable experiments and future improvements on Arm systems.
-
-NICs we have tested so far:
-
-|Vendor         |Firmware Version        |
-|---------------|------------------------|
-|Intel X710     |9.20 0x8000d95e 22.0.9  |
-|Intel E810-XXV |4.00 0x8001184e 1.3236.0|
-|E810-C         |4.20 0x8001784e 22.0.9  |
-|Intel XXV710   |6.02 0x80003888         |
-
-**Note**:
-
+- Compute Hardware:
+  - For 4x4 100MHz 4L DL and 2L UL, it is important to have a clock speed
+    higher than 4GHz or use accelerators as AMD T2, Intel V-RAN Boost or Nvidia
+    Aerial L1.
+  - Minimum functional hardware requires clock speed of minimum 2.5GHz, 10 SFP
+    NIC
+  - Recommended servers for 8/9 bit compression:
+    - Intel: 3rd Generation (Ice Lake) or higher
+    - AMD: 4th Generation (Genoa) or higher
+    - ARM: Neoverse V2
+  - Uncompressed mode does not require AVX512
+- The NIC card should support hardware PTP time stamping.
 - With AMD servers/desktop machines with PCIe 5.0 we have only used E810 cards.
-- If you are using Mellanox NIC, please be aware that DPDK can't bind the NIC as vfio-pci. Instead it must be bind with mlx driver.
+- If you are using Mellanox NIC, please be aware that DPDK can't bind the NIC
+  as `vfio-pci`. Instead it must be bind with `mlx` driver.
 
-PTP enabled switches and grandmaster clock we have in are lab:
+PTP enabled switches and Grandmaster clock we have tested with:
 
-|Vendor                  |Software Version|
-|------------------------|----------------|
-|CISCO C93180YC-FX3      |10.2(4)         |
-|Fibrolan Falcon-RX/812/G|8.0.25.4        |
-|Qulsar Qg2 (Grandmaster)|12.1.27         |
+|Vendor                  |
+|------------------------|
+|CISCO C93180YC-FX3      |
+|Fibrolan Falcon-RX/812/G|
+|Qulsar Qg2 (Grandmaster)|
 
-**S-Plane synchronization is mandatory.** S-plane support is done via `ptp4l` and `phc2sys`. Make sure your version matches. 
+**S-Plane synchronization is mandatory.** S-plane support is done via 
+`ptp4l` and `phc2sys`. Make sure your version matches. 
 
-| Software  | Software Version |
-|-----------|------------------|
-| `ptp4l`   | 3.1.1            |
-| `phc2sys` | 3.1.1            |
+| Software  | Software Version|
+|-----------|-----------------|
+| `ptp4l`   | 4.4             |
+| `phc2sys` | 4.4             |
 
-We have only verified LLS-C3 configuration in our lab, i.e.  using an external
-grandmaster, a switch as a boundary clock, and the gNB/DU and RU.  We haven't
-tested any RU without S-plane.
+In our Lab we only use LLS-C3 configuration, i.e. using an external
+Grandmaster, a switch as a boundary clock, and the gNB/DU and RU. We have not
+tested any RU without S-plane. Though some community members use LLS-C1 and its
+support depends on the NIC.
+
 We tested the category A radio units listed below.
 
-|Vendor           |Software Version                             |
-|-----------------|---------------------------------------------|
-|VVDN LPRU        |03-v3.0.5                                    |
-|LiteON RU FR1    |01.00.08/02.00.03/02.00.10                   |
-|LiteON RU FR2    |02.00.07                                     |
-|Metanoia RU FR1  |2.0.6                                        |
-|Benetel 650      |RAN650-1v2.1.0-M-0820797                     |
-|Benetel 550      |RAN550-1v2.1.0-M-0820797                     |
-|Foxconn RPQN     |v3.1.15q.551_rc10                            |
-|Microamp RU      |0.1.174                                      |
+|Vendor                |Software Version        |
+|----------------------|------------------------|
+|VVDN LPRU             |03-v3.0.5               |
+|LiteON RU FR1         |02.00.10                |
+|LiteON RU FR2         |02.00.07                |
+|Metanoia RU FR1 (Jura)|2.0.6                   |
+|Benetel 650           |RAN650-1v2.1.0-M-0820797|
+|Benetel 550           |RAN550-1v2.1.0-M-0820797|
+|Foxconn RPQN          |v3.1.15q.551_rc10       |
+|Microamp RU (FR2)     |0.1.174                 |
 
-Tested libxran releases:
+Supported libxran releases:
 
 | Vendor                                  |
 |-----------------------------------------|
 | `oran_f_release_v1.0`                   |
 | `oran_k_release_v1.0`                   |
 
-**Note**: The libxran driver of OAI identifies the above F release version as "6.1.0" (F is the sixth letter, then 1.0), and the above K release as "11.1.0".
+**Note**: The libxran driver of OAI identifies the above F release version as
+"6.1.0" (F is the sixth letter, then 1.0), and the above K release as "11.1.0".
 
 ### Configure your server
 
-1. Disable Hyperthreading (HT) in your BIOS. In all our servers HT is always disabled.
-2. We recommend you to start with a fresh installation of OS (either RHEL or Ubuntu). You have to install realtime kernel on your OS (Operating System). Based on your OS you can search how to install realtime kernel.
-3. Install realtime kernel for your OS
-4. Change the boot commands based on the below section. They can be performed either via `tuned` or via manually building the kernel
+1. Disable Hyperthreading (HT) in your BIOS for ease of CPU pining. If you want
+   to enable it then adjust the boot line command to isolate the whole physical
+   CPU including the threads.
+2. Configure the system with in performance mode. In some situation it will be
+   better to avoid BIOS telco profile as it uses HT and lowers the CPU clock
+   speed.
+3. We recommend you to start with a fresh installation of OS (Operating
+   System), either RPM or Debian.
+4. Change the boot commands based on the below section.
 
-#### CPU allocation
+##### x86 (Intel/AMD)
 
-**This section is important to read, regardless of the operating system you are using.**
+We are taking an example of a 32 core Intel(R) Xeon(R) Gold 6433N, depending on
+your system you would need to adjust the isolated and non-isolated cores.
+Though we don't recommend hyper-threading but if you want to use then make sure
+you isolate the whole physical CPU.
 
-Your server could be:
+1. Install realtime kernel,
 
-* One NUMA node (See [one NUMA node example](#one-numa-node)): all the processors are sharing a single memory system.
-* Two NUMA nodes (see [two NUMA nodes example](#two-numa-nodes)): processors are grouped in 2 memory systems.
-  - Usually the even (ie `0,2,4,...`) CPUs are on the 1st socket
-  - And the odd (ie (`1,3,5,...`) CPUs are on the 2nd socket
-
-DPDK, OAI and kernel threads require to be properly allocated to extract maximum real-time performance for your use case.
-
-1. **NOTE**: Currently the default OAI 7.2 configuration file requires isolated **CPUs 0,2,4** for DPDK/libXRAN, **CPU 6** for `ru_thread`, **CPU 8** for `L1_rx_thread` and **CPU 10** for `L1_tx_thread`. It is preferrable to have all these threads on the same socket.
-2. Allocating CPUs to the OAI nr-softmodem is done using the `--thread-pool` option. Allocating 4 CPUs is the minimal configuration but we recommend to allocate at least **8** CPUs. And they can be on a different socket as the DPDK threads.
-3. And to avoid kernel preempting these allocated CPUs, it is better to force the kernel to use un-allocated CPUs.
-
-Let summarize for example on a `32-CPU` single NUMA node system, regardless of the number of sockets:
-
-|Applicative Threads|Allocated CPUs    |
-|-------------------|------------------|
-|XRAN DPDK usage    |0,2,4             |
-|OAI `ru_thread`    |6                 |
-|OAI `L1_rx_thread` |8                 |
-|OAI `L1_tx_thread` |10                |
-|OAI `nr-softmodem` |1,3,5,7,9,11,13,15|
-|kernel             |16-31             |
-
-In below example we have shown the output of `/proc/cmdline` for two different servers, each of them have different number of NUMA nodes. **Be careful in isolating the CPUs in your environment.** Apart from CPU allocation there are additional parameters which are important to be present in your boot command.
-
-Modifying the `linux` command line usually requires to edit string `GRUB_CMDLINE_LINUX` in `/etc/default/grub`, run a `grub` command and reboot the server.
-
-* Set parameters `isolcpus`, `nohz_full` and `rcu_nocbs` with the list of CPUs to isolate for XRAN.
-* Set parameter `kthread_cpus` with the list of CPUs to isolate for kernel.
-
-Set the `tuned` profile to `realtime`. If the `tuned-adm` command is not installed then you have to install it. When choosing this profile you have to mention the isolated cpus in `/etc/tuned/realtime-variables.conf`. By default this profile adds `skew_tick=1 isolcpus=managed_irq,domain,<cpu-you-choose> intel_pstate=disable nosoftlockup` in the boot command. **Make sure you don't add them while changing `/etc/default/grub`**.
+Ubuntu (to know more about the below commands please check Canonical's official
+website):
 
 ```bash
-tuned-adm profile realtime
+sudo apt install ubuntu-realtime
+# using ubuntu pro if you have the subscription
+pro enable realtime-kernel
 ```
 
-**Checkout anyway the examples below.**
-
-#### One NUMA Node
-
-Below is the output of `/proc/cmdline` of a single NUMA node server,
+Red Hat (to know more about the below commands please check Red Hat's official
+website):
 
 ```bash
-NUMA:
-  NUMA node(s):          1
-  NUMA node0 CPU(s):     0-31
+subscription-manager repos --enable rhel-10-for-x86_64-rt-rpms
+dnf groupinstall RT
 ```
+
+For other operating systems you would need to either build the kernel from
+source or search if you can install it using a package manager.
+
+2. Update the Grub via creating a file `/etc/default/grub.d/cmdline.cfg`.
 
 ```bash
-isolcpus=0-15 nohz_full=0-15 rcu_nocbs=0-15 kthread_cpus=16-31 rcu_nocb_poll nosoftlockup default_hugepagesz=1GB hugepagesz=1G hugepages=20 amd_iommu=on iommu=pt mitigations=off skew_tick=1 selinux=0 enforcing=0 tsc=reliable nmi_watchdog=0 softlockup_panic=0 audit=0 vt.handoff=7
+GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX isolcpus=domain,4-31 nohz_full=4-31 irqaffinity=0,1,2,3 rcu_nocbs=4-31 hugepagesz=2M hugepages=0 default_hugepagesz=1G hugepagesz=1G hugepages=20 intel_iommu=on iommu=pt selinux=0 enforcing=0 intel_pstate=disable"
 ```
 
-Example taken for AMD EPYC 9374F 32-Core Processor
+In the above command:
 
-#### Two NUMA Nodes
+1. Isolated CPUs: 4-31, we recommend to leave the initial CPUs for the kernel
+   - `isolcpus=domain,4-31`: removes CPUs 4–31 from normal scheduler
+     load-balancing domains
+   - `nohz_full=4-31` enables full tickless operation on those CPUs
+   - `rcu_nocbs=4-31` moves RCU callback processing off those CPUs
+2. Non-isolated CPUs: 0,1,2,3
+   - `irqaffinity=0,1,2,3` directs default interrupt handling to CPUs 0–3 so
+     the isolated CPUs are disturbed less.
+3. Hugepages: The default hugepage size is 1G (`default_hudepagesz=1G`) and the
+   command above reserves 20G (`hugepages=20`). If you want to reduce then you
+   can put `hugepages=9` as OAI gNB/DU by default initializes with 8G
+   hugepages.
+4. IOMMU: It is needed for DPDK, for Intel servers its `intel_iommu` but AMD it
+   is `amd_iommu`
+5. P-State: For Intel the Pstate driver is `intel_pstate` and for AMD it is
+   `amd_pstate`
 
-Below is the output of `/proc/cmdline` of a two NUMA node server,
-
-```
-NUMA:
-  NUMA node(s):          2
-  NUMA node0 CPU(s):     0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34
-  NUMA node1 CPU(s):     1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35
-```
+After changing you would need to rebuild the grub and reboot the system:
 
 ```bash
-mitigations=off usbcore.autosuspend=-1 intel_iommu=on intel_iommu=pt selinux=0 enforcing=0 nmi_watchdog=0 softlockup_panic=0 audit=0 skew_tick=1 isolcpus=managed_irq,domain,0,2,4,6,8,10,12,14,16 nohz_full=0,2,4,6,8,10,12,14,16 rcu_nocbs=0,2,4,6,8,10,12,14,16 rcu_nocb_poll intel_pstate=disable nosoftlockup cgroup_disable=memory mce=off hugepagesz=1G hugepages=40 hugepagesz=2M hugepages=0 default_hugepagesz=1G isolcpus=managed_irq,domain,0,2,4,6,8,10,12,14 kthread_cpus=18-35 intel_pstate=disable nosoftlockup tsc=reliable
+sudo update-grub
+sudo reboot
 ```
 
-Example taken for Intel(R) Xeon(R) Gold 6354 CPU @ 3.00GHz
-
-#### Common
-
-Configure your servers to maximum performance mode either via OS or in BIOS. If you want to disable CPU sleep state via OS then use the below command:
+3. Configure your server to maximum performance mode either via OS or in BIOS.
+If you want to disable CPU sleep states via OS then use the below command:
 
 ```bash
-# to disable
+# Disable cpu cstates
 sudo cpupower idle-set -D 0
-#to enable
-sudo cpupower idle-set -E
+# you can make a crontab to automate this step at restart
 ```
 
-The above information we have gathered either from O-RAN documents or via our own experiments. In case you would like to read the O-RAN documents then here are the links:
+##### Aarch64
 
-1. [O-RAN-SC O-DU Setup Configuration](https://docs.o-ran-sc.org/projects/o-ran-sc-o-du-phy/en/latest/Setup-Configuration_fh.html)
-2. [O-RAN Cloud Platform Reference Designs 2.0,O-RAN.WG6.CLOUD-REF-v02.00,February 2021](https://orandownloadsweb.azurewebsites.net/specifications)
+We are taking an example from a Gracehopper GH200 Neoverse-V2
 
+1. Install nvidia-64k pagesize kernel using `apt/dnf`
+
+2. Update the Grub via creating a file `/etc/default/grub.d/cmdline.cfg`.
+
+```bash
+GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUXpci=realloc=off pci=pcie_bus_safe default_hugepagesz=512M hugepagesz=512M hugepages=256 tsc=reliable processor.max_cstate=0 audit=0 idle=poll rcu_nocb_poll nosoftlockup irqaffinity=0 isolcpus=managed_irq,domain,4-71 nohz_full=4-71 rcu_nocbs=4-71 earlycon module_blacklist=nouveau acpi_power_meter.force_cap_on=y numa_balancing=disable init_on_alloc=0 preempt=none"
+```
+
+In the above command (the explanation of the parameters is same as x86):
+
+1. Isolated CPUs: 4-71, we recommend to leave the initial CPUs for the kernel
+2. Non-isolated CPUs: 0,1,2,3
+3. Hugepages: The default hugepage size is 512M (`default_hudepagesz=512M`) and the command above reserves 131072M (`hugepages=256`).
+
+After changing you would need to rebuild the grub and reboot the system:
+
+```bash
+sudo update-grub
+sudo reboot
+```
+
+You can adapt the above command for a DGX spark.
+
+##### Common for both Architectures
+
+1. Configuration for realtime scheduling:
+
+```bash
+# create a file in sysctl.d
+vi /etc/sysctl.d/rt.conf
+# disables the RT throttling limit, allowing real-time tasks to use unlimited CPU time
+kernel.sched_rt_runtime_us=-1
+# prevents timers from being migrated between CPUs, reducing jitter on isolated/real-time cores.
+kernel.timer_migration=0
+```
+
+2. If you are using systemd you can configure `CPUAffinity` in `/etc/systemd/
+system.conf` to non-isolated CPUs. It helps if you are having issues with SSH
+or tcpdump when OAI-gNB/DU is running.
+
+After applying both the steps you can reboot the system.
 
 ### PTP configuration
 
-**Note**: You may run OAI with O-RAN 7.2 Fronthaul without a RU attached (e.g. for benchmarking).
+**Note**: You may run OAI with O-RAN 7.2 Fronthaul without a RU attached (e.g.
+for benchmarking).
 In such case, you can skip PTP configuration and go to DPDK section.
 
 1. You can install `linuxptp` rpm or debian package. It will install ptp4l and phc2sys.
 
 ```bash
-#RHEL
-sudo dnf install linuxptp -y
-#Ubuntu
-sudo apt install linuxptp -y
+# Sometimes in the package repository the PTP version is old, so its better to compile from source
+git clone https://github.com/richardcochran/linuxptp.git && cd linuxptp
+git checkout v4.4
+make
+cp ptp4l phc2sys /usr/sbin/
 ```
 
 Once installed you can use this configuration file for ptp4l (`/etc/ptp4l.conf`). Here the clock domain is 24 so you can adjust it according to your PTP GM clock domain
@@ -198,19 +229,19 @@ Once installed you can use this configuration file for ptp4l (`/etc/ptp4l.conf`)
 ```
 [global]
 domainNumber            24
-slaveOnly               1
+clientOnly              1
 time_stamping           hardware
-tx_timestamp_timeout    1
+tx_timestamp_timeout    50
 logging_level           6
 summary_interval        0
 #priority1               127
 
-[your_PTP_ENABLED_NIC]
+[PTP_ENABLED_NIC_INTERFACE]
 network_transport       L2
 hybrid_e2e              0
 ```
 
-You need to increase `tx_timestamp_timeout` to 50 or 100 for Intel E-810. You will see that in the logs of ptp.
+You need to increase `tx_timestamp_timeout` to 100 if needed. You will see that in the logs of ptp.
 
 Create the configuration file for ptp4l (`/etc/sysconfig/ptp4l`)
 
@@ -221,7 +252,7 @@ OPTIONS="-f /etc/ptp4l.conf"
 Create the configuration file for phc2sys (`/etc/sysconfig/phc2sys`)
 
 ```
-OPTIONS="-a -r -r -n 24"
+OPTIONS="-s PTP_ENABLED_NIC_INTERFACE -w -n 24 -r -r -m -R 8"
 ```
 
 The service of ptp4l (`/usr/lib/systemd/system/ptp4l.service`) should be configured as below:
@@ -265,8 +296,7 @@ Beware that PTP issues may show up only when running OAI and XRAN. If you are us
 1. Make sure that you have `skew_tick=1` in `/proc/cmdline`
 2. For Intel E-810 cards set `tx_timestamp_timeout` to 50 or 100 if there are errors in ptp4l logs
 3. Other time sources than PTP, such as NTP or chrony timesources, should be disabled. Make sure they are enabled as further below.
-4. Make sure you set `kthread_cpus=<cpu_list>` in `/proc/cmdline`.
-5. If `rms` or `delay` in `ptp4l` or `offset` in `phc2sys` logs remain high then you can try pinning the `ptp4l` and `phc2sys` processes to an isolated CPU.
+4. If `rms` or `delay` in `ptp4l` or `offset` in `phc2sys` logs remain high then you can try pinning the `ptp4l` and `phc2sys` processes to an isolated CPU.
 
 ```bash
 #to check there is NTP enabled or not
@@ -281,9 +311,9 @@ Download DPDK version 20.11.9 (F release) or 24.11.4 (K release).
 
 ```bash
 # on debian
-sudo apt install wget xz-utils libnuma-dev
+sudo apt install wget xz-utils libnuma-dev libibverbs-dev rdma-core python3-pyelftools meson
 # on Fedora/RHEL
-sudo dnf install wget xz numactl-devel
+sudo dnf install wget xz numactl-devel rdma-core-devel libibverbs-devel python3-pyelftools meson
 cd
 wget http://fast.dpdk.org/rel/dpdk-20.11.9.tar.xz # F release
 wget http://fast.dpdk.org/rel/dpdk-24.11.4.tar.xz # K release
@@ -292,11 +322,6 @@ wget http://fast.dpdk.org/rel/dpdk-24.11.4.tar.xz # K release
 #### DPDK Compilation and Installation
 
 ```bash
-# Installing meson : it should pull ninja-build and compiler packages
-# on debian
-sudo apt install python3-pyelftools meson
-# on Fedora/RHEL
-sudo dnf install python3-pyelftools meson
 tar xvf dpdk-20.11.9.tar.xz && cd dpdk-stable-20.11.9 # F release
 tar xvf dpdk-24.11.4.tar.xz && cd dpdk-stable-24.11.4 # K release
 
@@ -310,6 +335,7 @@ sudo ninja install -C build
 Check if the LD cache contains the DPDK Shared Objects after update:
 
 ```bash
+# output for DPDK 20.11.9
 sudo ldconfig -v | grep rte_
 	librte_fib.so.0.200.2 -> librte_fib.so.0.200.2
 	librte_telemetry.so.0.200.2 -> librte_telemetry.so.0.200.2
@@ -374,7 +400,7 @@ sudo ninja deinstall -C build
 Clone OAI code base in a suitable repository, here we are cloning in `~/openairinterface5g` directory,
 
 ```bash
-git clone https://gitlab.eurecom.fr/oai/openairinterface5g.git ~/openairinterface5g
+git clone https://github.com/duranta-project/openairinterface5g.git ~/openairinterface5g
 cd ~/openairinterface5g/
 ```
 
@@ -383,6 +409,7 @@ cd ~/openairinterface5g/
 Download ORAN FHI DU library, checkout the correct version, and apply the correct patch (available in `oai_folder/cmake_targets/tools/oran_fhi_integration_patches`).
 
 #### F release
+
 ```bash
 git clone https://github.com/openairinterface/o-du-phy.git ~/phy
 cd ~/phy
@@ -394,16 +421,15 @@ git apply ~/openairinterface5g/cmake_targets/tools/oran_fhi_integration_patches/
 ```bash
 git clone https://github.com/openairinterface/o-du-phy.git ~/phy
 cd ~/phy
-git checkout <desired-tag> # shall match a variable `K_VERSION`
+git checkout 11.1.1 # the tag points to the `main` branch which has all patches applied that are relevant for OAI integration; the tag matches the value of cmake variable `K_VERSION`
 ```
+or use `xran_DOWNLOAD` option when compiling OAI gNB.
 
 Compile the fronthaul interface library by calling `make` and the option
 `XRAN_LIB_SO=1` to have it build a shared object. Note that we provide two
 environment variables `RTE_SDK` for the path to the source tree of DPDK, and
-`XRAN_DIR` to set the path to the fronthaul library.  
-For building for a Arm target, set as well the environment variable `TARGET=armv8`.
-DU execution on Arm systems is yet not functional.
-This feature is intended to enable experiments and future improvements on Arm systems.
+`XRAN_DIR` to set the path to the fronthaul library. For building for a Arm
+target, set as well the environment variable `TARGET=armv8`.
 
 **Note**: you need at least gcc-11 and g++-11.
 
@@ -535,7 +561,7 @@ cat /etc/ru_config.cfg
 mimo_mode=1_2_3_4_4x4
 downlink_scaling=0
 prach_format=short
-compression=static_compressed
+compression=static_compressed # if `dynamic_compressed` used, set the `comp_hdr_type` to `dynamic` in the gNB config file
 lf_prach_compression_enable=true
 cplane_per_symbol_workaround=disabled
 cuplane_dl_coupling_sectionID=disabled
@@ -561,7 +587,7 @@ cat /etc/ru_config.cfg
 mimo_mode=1_2_3_4_4x4
 downlink_scaling=0
 prach_format=short
-compression=static_compressed
+compression=static_compressed # if `dynamic_compressed` used, set the `comp_hdr_type` to `dynamic` in the gNB config file
 lf_prach_compression_enable=true
 cplane_per_symbol_workaround=disabled
 cuplane_dl_coupling_sectionID=disabled
@@ -1566,6 +1592,7 @@ Edit the sample OAI gNB configuration file and check following parameters:
     * `RunSlotPrbMapBySymbol`: enable CP multisection (one symbol per section); default value is 0
     *  DU delay profile (`T1a` and `Ta4`): pairs of numbers `(x, y)` specifying minimum and maximum delays
     * `ru_config`: RU-specific configuration:
+      * `comp_hdr_type`: compression header type; `dynamic` or `static` (default)
       * `iq_width`: Width of DL/UL IQ samples: if 16, no compression, if <16, applies
         compression
       * `iq_width_prach`: Width of PRACH IQ samples: if 16, no compression, if <16, applies
@@ -1698,9 +1725,10 @@ For two RUs using a 8x8 configuration, i.e. a single antenna system, the referen
 
 For two RUs each using a 4x4 configuration, i.e. a distributed antenna system (DAS),
 we use the analog beamforming implementation. More details can be found in
-[this document](./analog_beamforming.md). It is important to note that
-the configuration file should be set as a 4x4 scenario and each RU would be given a
-different beam. The reference DU configuration file is [`gnb-du.sa.band77.273prb.fhi72.4x4-das-benetel650_650.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-du.sa.band77.273prb.fhi72.4x4-das-benetel650_650.conf).
+[this document](./analog_beamforming.md). It is important to note the following parameters in the configuration file:
+- In RU section `nb_tx` and `nb_rx` indicates the total number of physical antenna ports across all distributed RUs.
+- `pusch_AntennaPorts`, `pdsch_AntennaPorts_XP * pdsch_AntennaPorts_N1 * pdsch_AntennaPorts_N2` indicate the number of logical antenna ports for one analog beam.
+The reference DU configuration file is [`gnb-du.sa.band77.273prb.fhi72.4x4-das-benetel650_650.conf`](../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb-du.sa.band77.273prb.fhi72.4x4-das-benetel650_650.conf).
 
 DAS is enabled by setting to 1 the parameter `enable_das` in `L1` section.
 
@@ -2035,7 +2063,7 @@ fhi_72 = {
   * `dpdk_mem_size`: [*]
   * `dpdk_iova_mode`: [*]
   * `owdm_enable`: [*]
-  * `fh_config`: only DU delay profile (`T1a` and `Ta4`)
+  * `fh_config`: DU delay profile (`T1a` and `Ta4`), and optionally `ru_config` for IQ bitwidth and compression type (assumed the same for PxSCH/PRACH)
   * `app_id`: [*]
 
 [*] see [Configure OAI gNB](#configure-oai-gnb) for more details
@@ -2043,7 +2071,7 @@ fhi_72 = {
 The following parameters are retrieved from the RU and forwarded to the xran:
 * `MTU`
 * `RU MAC address`
-* `IQ compression`: if RU supports multiple, the first value in the list is taken; please note that the same value is used for PxSCH/PRACH
+* `IQ compression`: unless explicitely specified via gNB config file, the first <iq-bitwidth> value from <compression-method-supported> node is taken and static compression is set (assumed the same for PxSCH/PRACH)
 * `PRACH offset`: hardcoded based on the RU vendor (i.e. for Benetel `max(Nrx,Ntx)`)
 
 ### Build and compile gNB
@@ -2057,7 +2085,7 @@ Compiled libraries:
 
 #### Using build_oai script
 ```bash
-git clone https://gitlab.eurecom.fr/oai/openairinterface5g.git ~/openairinterface5g
+git clone https://github.com/duranta-project/openairinterface5g.git ~/openairinterface5g
 cd ~/openairinterface5g/cmake_targets/
 ./build_oai -I  # if you never installed OAI, use this command once before the next line
 ./build_oai --install-optional-packages  # for pcre/libpcre3, libssh, and libxml2 library installation
@@ -2068,7 +2096,7 @@ PKG_CONFIG_PATH=/opt/mplane-v2/lib/pkgconfig ./build_oai --gNB --ninja -t oran_f
 
 #### Using cmake directly
 ```bash
-git clone https://gitlab.eurecom.fr/oai/openairinterface5g.git ~/openairinterface5g
+git clone https://github.com/duranta-project/openairinterface5g.git ~/openairinterface5g
 cd ~/openairinterface5g/
 mkdir build && cd build
 cmake .. -GNinja -DOAI_FHI72=ON -DOAI_FHI72_MPLANE=ON -Dxran_LOCATION=$HOME/phy/fhi_lib/lib
@@ -2171,6 +2199,7 @@ sequenceDiagram
 [HW]   [MPLANE] Storing the following information to forward to xran:
     RU MAC address 8c:1f:64:d1:11:c0
     MTU 9216
+    Compression header type static
     IQ bitwidth 9
     PRACH offset 4
     DU port bitmask 61440
@@ -2368,6 +2397,7 @@ sequenceDiagram
     <compression>
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
+      <compression-method>BLOCK_FLOATING_POINT</compression-method>
     </compression>
     <frame-structure>193</frame-structure>
     <cp-type>NORMAL</cp-type>
@@ -2387,6 +2417,7 @@ sequenceDiagram
     <compression>
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
+      <compression-method>BLOCK_FLOATING_POINT</compression-method>
     </compression>
     <frame-structure>193</frame-structure>
     <cp-type>NORMAL</cp-type>
@@ -2406,6 +2437,7 @@ sequenceDiagram
     <compression>
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
+      <compression-method>BLOCK_FLOATING_POINT</compression-method>
     </compression>
     <frame-structure>193</frame-structure>
     <cp-type>NORMAL</cp-type>
@@ -2425,6 +2457,7 @@ sequenceDiagram
     <compression>
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
+      <compression-method>BLOCK_FLOATING_POINT</compression-method>
     </compression>
     <frame-structure>193</frame-structure>
     <cp-type>NORMAL</cp-type>
@@ -2444,6 +2477,7 @@ sequenceDiagram
     <compression>
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
+      <compression-method>BLOCK_FLOATING_POINT</compression-method>
     </compression>
     <frame-structure>193</frame-structure>
     <cp-type>NORMAL</cp-type>
@@ -2468,6 +2502,7 @@ sequenceDiagram
     <compression>
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
+      <compression-method>BLOCK_FLOATING_POINT</compression-method>
     </compression>
     <frame-structure>193</frame-structure>
     <cp-type>NORMAL</cp-type>
@@ -2492,6 +2527,7 @@ sequenceDiagram
     <compression>
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
+      <compression-method>BLOCK_FLOATING_POINT</compression-method>
     </compression>
     <frame-structure>193</frame-structure>
     <cp-type>NORMAL</cp-type>
@@ -2516,6 +2552,7 @@ sequenceDiagram
     <compression>
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
+      <compression-method>BLOCK_FLOATING_POINT</compression-method>
     </compression>
     <frame-structure>193</frame-structure>
     <cp-type>NORMAL</cp-type>
@@ -2540,6 +2577,7 @@ sequenceDiagram
     <compression>
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
+      <compression-method>BLOCK_FLOATING_POINT</compression-method>
     </compression>
     <frame-structure>193</frame-structure>
     <cp-type>NORMAL</cp-type>
@@ -2564,6 +2602,7 @@ sequenceDiagram
     <compression>
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
+      <compression-method>BLOCK_FLOATING_POINT</compression-method>
     </compression>
     <frame-structure>193</frame-structure>
     <cp-type>NORMAL</cp-type>
@@ -2588,6 +2627,7 @@ sequenceDiagram
     <compression>
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
+      <compression-method>BLOCK_FLOATING_POINT</compression-method>
     </compression>
     <frame-structure>193</frame-structure>
     <cp-type>NORMAL</cp-type>
@@ -2612,6 +2652,7 @@ sequenceDiagram
     <compression>
       <iq-bitwidth>9</iq-bitwidth>
       <compression-type>STATIC</compression-type>
+      <compression-method>BLOCK_FLOATING_POINT</compression-method>
     </compression>
     <frame-structure>193</frame-structure>
     <cp-type>NORMAL</cp-type>
@@ -3665,7 +3706,7 @@ sudo ./nr-softmodem -O <without-mplane-configuration file> --thread-pool <list o
 
 ## Contact in case of questions
 
-You can ask your question on the [mailing lists](https://gitlab.eurecom.fr/oai/openairinterface5g/-/wikis/MailingList).
+You can ask your question on the [mailing lists](https://github.com/duranta-project/openairinterface5g/wiki/MailingList).
 
 Your email should contain below information:
 
@@ -3678,4 +3719,4 @@ Your email should contain below information:
 - RU Vendor and Version.
 - In case your question is related to performance, include a small description of the machine (CPU, RAM and networking card) and diagram of your testing environment. 
 - If you have any issues related to PTP or synchronization, then first check the section "Debugging PTP issues". Then share your problem with PTP version you are using, switch details and master clock.
-- Known/open issues are present on [GitLab](https://gitlab.eurecom.fr/oai/openairinterface5g/-/issues), so keep checking.
+- Known/open issues are present on [Github](https://github.com/duranta-project/openairinterface5g/issues), so keep checking.

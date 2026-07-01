@@ -205,7 +205,7 @@ static void test_copy(const nfapi_nr_uci_indication_t *msg)
   free_uci_indication(&copy);
 }
 
-int main(int n, char *v[])
+int main()
 {
   fapi_test_init();
 
