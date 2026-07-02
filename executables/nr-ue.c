@@ -558,6 +558,7 @@ static int UE_dl_preprocessing(PHY_VARS_NR_UE *UE,
     sampleShift = pbch_processing(UE, proc, phy_data);
     if(get_nrUE_params()->agc && UE->is_synchronized){ //ALEX added for AGC control when connected;
       nrue_ru_adjust_rx_gain(UE, UE->adjust_rxgain);
+      UE->adjust_rxgain = 0;
     }
     pdcch_processing(UE, proc, phy_data);
     if (phy_data->dlsch[0].active

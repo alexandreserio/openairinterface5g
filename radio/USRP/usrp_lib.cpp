@@ -857,25 +857,31 @@ int trx_usrp_set_gains(openair0_device_t *device,
                        openair0_config_t *openair0_cfg)
 {
   usrp_state_t *s = (usrp_state_t *)device->priv;
-  ::uhd::gain_range_t gain_range_tx = s->usrp->get_tx_gain_range(0);
-  //s->usrp->set_tx_gain(gain_range_tx.stop()-openair0_cfg[0].tx_gain[0]);
-  s->usrp->set_tx_gain(openair0_cfg[0].tx_gain[0]); //ALEX
-  ::uhd::gain_range_t gain_range = s->usrp->get_rx_gain_range(0);
-
-  // limit to maximum gain
-  if (openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0] > gain_range.stop()) {
-    LOG_E(HW,"RX Gain 0 too high, reduce by %f dB\n",
-          openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0] - gain_range.stop());
-    int gain_diff = gain_range.stop() - (openair0_cfg[0].rx_gain[0] - openair0_cfg[0].rx_gain_offset[0]);
-    return gain_diff;
+  for(int i=0; i <((int)s->usrp->get_tx_num_channels()); i++){
+    ::uhd::gain_range_t gain_range_tx = s->usrp->get_tx_gain_range(i);
+    if(i<(openair0_cfg[0].tx_num_channels)){
+      //s->usrp->set_tx_gain(gain_range_tx.stop()-openair0_cfg[0].tx_gain[0]);
+      s->usrp->set_tx_gain(openair0_cfg[0].tx_gain[i], i); //ALEX
+    }
   }
-
-  s->usrp->set_rx_gain(openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0]);
-  LOG_D(HW,"Setting USRP RX gain to %f dB (rx_gain %f dB | gain_range.stop() %f)\n",
-        openair0_cfg[0].rx_gain[0]-openair0_cfg[0].rx_gain_offset[0],
-        s->usrp->get_rx_gain(0),
-        //openair0_cfg[0].rx_gain[0],
-        gain_range.stop());
+  for(int i=0; i<((int)s->usrp->get_rx_num_channels()); i++){
+    if(i<openair0_cfg[0].rx_num_channels){
+      ::uhd::gain_range_t gain_range = s->usrp->get_rx_gain_range(i);
+      // limit to maximum gain
+      if (openair0_cfg[0].rx_gain[i]-openair0_cfg[0].rx_gain_offset[i] > gain_range.stop()) {
+        openair0_cfg[0].rx_gain[i] = gain_range.stop();
+      }
+      float curr_rxgain = s->usrp->get_rx_gain(i);
+      if(curr_rxgain != openair0_cfg[0].rx_gain[i]){
+        s->usrp->set_rx_gain(openair0_cfg[0].rx_gain[i]-openair0_cfg[0].rx_gain_offset[i], i);
+        LOG_W(HW,"Setting USRP RX gain to %f dB (rx_gain %f dB | gain_range.stop() %f)\n",
+              openair0_cfg[0].rx_gain[i]-openair0_cfg[0].rx_gain_offset[i],
+              s->usrp->get_rx_gain(i),
+              //openair0_cfg[0].rx_gain[0],
+              gain_range.stop());
+      }
+    }
+  }
   return(0);
 }
 
@@ -1372,7 +1378,7 @@ extern "C" {
         gain = gain_range.stop();
       }
       s->usrp->set_rx_gain(gain,i+choffset);
-      LOG_I(HW,
+      LOG_W(HW,
             "RX Gain %d %f (%f) => %f (max %f)\n",
             i,
             cfg->rx_gain[i],

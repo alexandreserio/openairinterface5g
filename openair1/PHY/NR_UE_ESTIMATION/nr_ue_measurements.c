@@ -203,11 +203,11 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
 
     if(((TARGET_RX_POWER - (int)rsrp_db_per_re) > 10) && (cfg0->rx_gain[0] < MAX_RF_GAIN)){
       ue->adjust_rxgain = +1; //ALEX added for AGC test
-      LOG_ME(PHY, "NEW adjust_rxgain assigned! ( %d dB)\n", ue->adjust_rxgain); //ALEX added for debug
+      LOG_ME(PHY, "NEW adjust_rxgain assigned! ( %d dB) (rsrp_per_re: %.2f)\n", ue->adjust_rxgain, rsrp_db_per_re); //ALEX added for debug
     }
     else if(((TARGET_RX_POWER - (int)rsrp_db_per_re) < -10) && (cfg0->rx_gain[0] > 0)){
       ue->adjust_rxgain = -1; //ALEX added for AGC test
-      LOG_ME(PHY, "NEW adjust_rxgain assigned! ( %d dB)\n", ue->adjust_rxgain); //ALEX added for debug
+      LOG_ME(PHY, "NEW adjust_rxgain assigned! ( %d dB) (rsrp_per_re: %.2f)\n", ue->adjust_rxgain, rsrp_db_per_re); //ALEX added for debug
     }
     else {
       ue->adjust_rxgain = 0;
