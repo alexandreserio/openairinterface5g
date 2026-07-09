@@ -218,13 +218,14 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
   static uint32_t log_cntr = 0; //ALEX
   if(log_cntr % 100 == 0){
     LOG_ME(PHY,
-          "[UE %d] ssb %d SS-RSRP: %d dBm/RE (rsrp: %.2f dB/RE), SS-SINR: %.1f dB (Current RX gain: %d)\n",
+          "[UE %d] ssb %d SS-RSRP: %d dBm/RE (rsrp: %.2f dB/RE), SS-SINR: %.1f dB (Current RX gain: %d)(is_sync: %d)\n",
           ue->Mod_id,
           ssb_index,
           ue->measurements.ssb_rsrp_dBm[ssb_index],
           rsrp_db_per_re,
           ue->measurements.ssb_sinr_dB[ssb_index],
-          (int)cfg0->rx_gain[0]); //ALEX D to ME and added current RX gain configured for USRP
+          (int)cfg0->rx_gain[0],
+          ue->is_synchronized); //ALEX D to ME and added current RX gain configured for USRP
   }
   log_cntr++; //ALEX added
 

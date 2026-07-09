@@ -378,12 +378,14 @@ int main(int argc, char **argv)
 
       UE_CC->sl_mode = get_softmodem_params()->sl_mode;
       init_actor(&UE_CC->sync_actor, "SYNC_", -1);
+      LOG_ME(UTIL, "num_dl_actors = %d\n", get_nrUE_params()->num_dl_actors); //ALEX
       if (get_nrUE_params()->num_dl_actors > 0) {
         UE_CC->dl_actors = calloc_or_fail(get_nrUE_params()->num_dl_actors, sizeof(*UE_CC->dl_actors));
         for (int i = 0; i < get_nrUE_params()->num_dl_actors; i++) {
           init_actor(&UE_CC->dl_actors[i], "DL_", -1);
         }
       }
+      LOG_ME(UTIL, "num_ul_actors = %d\n", get_nrUE_params()->num_ul_actors); //ALEX
       if (get_nrUE_params()->num_ul_actors > 0) {
         UE_CC->ul_actors = calloc_or_fail(get_nrUE_params()->num_ul_actors, sizeof(*UE_CC->ul_actors));
         for (int i = 0; i < get_nrUE_params()->num_ul_actors; i++) {

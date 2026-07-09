@@ -86,9 +86,8 @@
 static void start_process_slot_tx(void* arg) {
   notifiedFIFO_elt_t *newTx = arg;
   nr_rxtx_thread_data_t *curMsgTx = NotifiedFifoData(newTx);
-  int num_ul_actors = get_nrUE_params()->num_ul_actors;
-  if (num_ul_actors > 0) {
-    pushNotifiedFIFO(&curMsgTx->UE->ul_actors[curMsgTx->proc.nr_slot_tx % num_ul_actors].fifo, newTx);
+  if (get_nrUE_params()->num_ul_actors > 0) {
+    pushNotifiedFIFO(&curMsgTx->UE->ul_actors[curMsgTx->proc.nr_slot_tx % get_nrUE_params()->num_ul_actors].fifo, newTx);
   } else {
     newTx->processingFunc(curMsgTx);
   }
