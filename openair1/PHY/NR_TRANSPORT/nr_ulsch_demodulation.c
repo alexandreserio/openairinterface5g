@@ -20,11 +20,18 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <stdlib.h>
 #include <time.h>
 #include <sys/time.h>
 #include "openair1/SCHED_NR/sched_nr.h"
 #include <unistd.h>
 
+/*
+ * Alteracao face ao demod original:
+ * este bloco adiciona exportacao opcional das amostras IQ PUSCH para um FIFO.
+ * O FIFO e non-blocking para nao atrasar o processamento interno do OAI se o leitor nao
+ * estiver ligado ou nao conseguir acompanhar.
+ */
 #define IQ_FIFO_PATH "/tmp/oai_iq.pipe"
 #define IQ_FIFO_FRAME_STRIDE 32
 static pthread_mutex_t iq_fifo_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -123,6 +130,68 @@ static inline void iq_fifo_write_c16_frame(const c16_t *samples, uint32_t sample
 
   iq_fifo_write_c16_frame_locked(samples, sample_count);
   pthread_mutex_unlock(&iq_fifo_lock);
+}
+
+// Publica no FIFO os símbolos IQ PUSCH da primeira camada,
+// após compensação do canal.
+static void iq_fifo_write_pusch_frame(const NR_gNB_PUSCH *pusch_vars,
+                                      const nfapi_nr_pusch_pdu_t *rel15_ul,
+                                      int end_symbol)
+{
+  // Sem estruturas ou dados PUSCH válidos para processar.
+  if (pusch_vars == NULL || rel15_ul == NULL)
+    return;
+
+  // Stride alinhado reservado para cada símbolo em rxdataF_comp.
+  const int buffer_length =
+      ceil_mod(rel15_ul->rb_size * NR_NB_SC_PER_RB, 16);
+
+  // Conta o número total de símbolos IQ correspondentes
+  // aos REs válidos dos símbolos PUSCH processados.
+  uint32_t sample_count = 0;
+  for (int symbol = rel15_ul->start_symbol_index;
+       symbol < end_symbol;
+       symbol++) {
+    sample_count += pusch_vars->ul_valid_re_per_slot[symbol];
+  }
+
+  // Não envia uma frame quando não existem REs válidos.
+  if (sample_count == 0)
+    return;
+
+  // Reserva um buffer contínuo para a frame IQ compactada.
+  c16_t *samples = malloc(sample_count * sizeof(*samples));
+  if (samples == NULL) {
+    LOG_W(PHY,
+          "Unable to allocate IQ FIFO frame with %u samples\n",
+          sample_count);
+    return;
+  }
+
+  // Copia os REs válidos da primeira camada de cada símbolo
+  // para um buffer IQ contínuo, removendo o padding entre símbolos.
+  uint32_t offset = 0;
+  for (int symbol = rel15_ul->start_symbol_index;
+       symbol < end_symbol;
+       symbol++) {
+    const uint32_t valid_re =
+        pusch_vars->ul_valid_re_per_slot[symbol];
+
+    if (valid_re == 0)
+      continue;
+
+    // rxdataF_comp usa um stride de buffer_length por símbolo.
+    memcpy(&samples[offset],
+           &pusch_vars->rxdataF_comp[0][symbol * buffer_length],
+           valid_re * sizeof(*samples));
+
+    offset += valid_re;
+  }
+    // Envia a frame para a FIFO.
+  iq_fifo_write_c16_frame(samples, offset);
+
+  // Liberta o buffer temporário.
+  free(samples);
 }
 
 
@@ -324,7 +393,7 @@ static void inner_rx(PHY_VARS_gNB *gNB,
                            chFext[aatx][aarx],
                            soffset+(symbol * frame_parms->ofdm_symbol_size),
                            dmrs_symbol * frame_parms->ofdm_symbol_size,
-                           dmrs_symbol_flag, 
+                           dmrs_symbol_flag,
                            rel15_ul,
                            frame_parms);
       stop_meas(pusch_extr);
@@ -521,9 +590,6 @@ static void nr_pusch_symbol_processing(void *arg)
       llr16[i] = llr_ptr[i] * s[i];
     stop_meas(&rdata->ul_unscram);
   }
-
-  const uint32_t scope_sz = frame_parms->N_RB_UL * NR_NB_SC_PER_RB * frame_parms->symbols_per_slot;
-  iq_fifo_write_c16_frame(pusch_vars->rxdataF_comp[0], scope_sz);
 
   // Task running in // completed
   completed_task_ans(rdata->ans);
@@ -743,7 +809,7 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
   // first the computation of channel levels
 
   int nb_re_pusch = 0, meas_symbol = -1;
-  for(meas_symbol = rel15_ul->start_symbol_index; meas_symbol < end_symbol; meas_symbol++) 
+  for(meas_symbol = rel15_ul->start_symbol_index; meas_symbol < end_symbol; meas_symbol++)
     if ((nb_re_pusch = get_nb_re_pusch(frame_parms, rel15_ul, meas_symbol)) > 0)
       break;
 
@@ -776,7 +842,7 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
                            (c16_t *)&ul_ch_estimates_ext[nl * num_sp_streams + aarx][meas_symbol * nb_re_pusch],
                            soffset + meas_symbol * frame_parms->ofdm_symbol_size,
                            dmrs_symbol * frame_parms->ofdm_symbol_size,
-                           (rel15_ul->ul_dmrs_symb_pos >> meas_symbol) & 0x01, 
+                           (rel15_ul->ul_dmrs_symb_pos >> meas_symbol) & 0x01,
                            rel15_ul,
                            frame_parms);
       stop_meas(&gNB->pusch_extraction_stats);
@@ -829,8 +895,8 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
     int res_per_task = 0;
     for (int s = 0; s < numSymbols && s + symbol < end_symbol; s++) {
       pusch_vars->ul_valid_re_per_slot[symbol+s] = get_nb_re_pusch(frame_parms,rel15_ul,symbol+s);
-      pusch_vars->llr_offset[symbol+s] = ((symbol+s) == rel15_ul->start_symbol_index) ? 
-                                         0 : 
+      pusch_vars->llr_offset[symbol+s] = ((symbol+s) == rel15_ul->start_symbol_index) ?
+                                         0 :
                                          pusch_vars->llr_offset[symbol+s-1] + pusch_vars->ul_valid_re_per_slot[symbol+s-1] * rel15_ul->qam_mod_order;
       res_per_task += pusch_vars->ul_valid_re_per_slot[symbol + s];
     }
@@ -907,6 +973,9 @@ int nr_rx_pusch_tp(PHY_VARS_gNB *gNB,
 #endif
 
   join_task_ans(&ans);
+
+  iq_fifo_write_pusch_frame(pusch_vars, rel15_ul, end_symbol);
+
   for (int i = 0; i < sz_arr; ++i) {
     // retrieve measurements
     puschSymbolProc_t *rdata = &arr[i];
