@@ -3181,9 +3181,26 @@ static void handle_rar_reception(NR_UE_MAC_INST_t *mac, NR_MAC_RAR *rar, frame_t
   int ret = nr_ue_pusch_scheduler(mac, 1, frame, slot, &frame_tx, &slot_tx, tda_info.k2 + ntn_ue_koffset);
 
   // TA command
+  const int ta = rar->TA2 + (rar->TA1 << 5);
+  const bool ta_timer_active = nr_timer_is_active(&mac->time_alignment_timer);
+  LOG_A(NR_MAC,
+        "[TA_DEBUG][UE_RAR_DECODE] %d.%d UE %d RAPID %u TA1 %u TA2 %u encoded_ta %d mac_ta_command %d "
+        "msg3_tx %d.%d k2 %ld ntn_ue_koffset %d time_alignment_active %d\n",
+        frame,
+        slot,
+        mac->ue_id,
+        ra->ra_PreambleIndex,
+        rar->TA1,
+        rar->TA2,
+        ta,
+        31 + ta,
+        frame_tx,
+        slot_tx,
+        tda_info.k2,
+        ntn_ue_koffset,
+        ta_timer_active);
   // if the timeAlignmentTimer associated with this TAG is not running
-  if (!nr_timer_is_active(&mac->time_alignment_timer)) {
-    const int ta = rar->TA2 + (rar->TA1 << 5);
+  if (!ta_timer_active) {
     set_time_alignment(mac, ta, rar_ta, frame_tx, slot_tx);
     LOG_W(MAC, "received TA command %d (TA2 = %d // TA1 = %d)\n", 31 + ta, rar->TA2, rar->TA1<<5);
   }

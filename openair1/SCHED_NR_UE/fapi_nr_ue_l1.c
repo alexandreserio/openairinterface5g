@@ -108,7 +108,8 @@ static void configure_ta_command(PHY_VARS_NR_UE *ue, fapi_nr_ta_command_pdu *ta_
   if (ta_command_pdu->is_rar) {
     ue->ta_slot = ta_command_pdu->ta_slot;
     ue->ta_frame = ta_command_pdu->ta_frame;
-    ue->ta_command = ta_command_pdu->ta_command + 31; // To use TA adjustment algo in ue_ta_procedures()
+    //ue->ta_command = ta_command_pdu->ta_command + 31; // To use TA adjustment algo in ue_ta_procedures()
+    ue->ta_command = ta_command_pdu->ta_command
   } else {
     ue->ta_slot = (ta_command_pdu->ta_slot + ul_tx_timing_adjustment) % slots_per_frame;
     if (ta_command_pdu->ta_slot + ul_tx_timing_adjustment > slots_per_frame)
@@ -117,6 +118,24 @@ static void configure_ta_command(PHY_VARS_NR_UE *ue, fapi_nr_ta_command_pdu *ta_
       ue->ta_frame = ta_command_pdu->ta_frame;
     ue->ta_command = ta_command_pdu->ta_command;
   }
+  ue->ta_command_is_rar = ta_command_pdu->is_rar;
+
+  LOG_D(PHY,
+    "[TA_DEBUG][UE_TA_CONFIG] input %d.%d apply %d.%d is_rar %d raw_ta_command %u stored_ta_command %u "
+    "bw_scaling_samples_per_ta %u ul_tx_timing_adjustment_slots %d numerology %d ofdm_symbol_size %d "
+    "samples_per_subframe %d\n",
+    ta_command_pdu->ta_frame,
+    ta_command_pdu->ta_slot,
+    ue->ta_frame,
+    ue->ta_slot,
+    ta_command_pdu->is_rar,
+    ta_command_pdu->ta_command,
+    ue->ta_command,
+    bw_scaling,
+    ul_tx_timing_adjustment,
+    numerology,
+    ofdm_symbol_size,
+    samples_per_subframe);
 
   LOG_D(PHY,
         "TA command received in %d.%d Starting UL time alignment procedures. TA update will be applied at frame %d slot %d\n",

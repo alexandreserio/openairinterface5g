@@ -12,6 +12,7 @@
 #include "PHY/defs_nr_common.h"
 #include "PHY/defs_gNB.h"
 #include "common/utils/fsn.h"
+#include <stdint.h>
 
 #define NR_PBCH_PDU_BITS 24
 
@@ -120,6 +121,26 @@ typedef struct rx_prach_out {
   uint16_t max_preamble;
   uint16_t max_preamble_energy;
   uint16_t max_preamble_delay;
+  uint16_t max_preamble_delay_raw; // raw PRACH correlation-bin delay before TA normalization
+  // TA_DEBUG
+  uint16_t max_preamble_offset;
+  uint16_t max_preamble_shift;
+  uint16_t max_preamble_shift_oversampled;
+  uint16_t max_preamble_peak_bin;
+  uint16_t second_preamble;
+  uint16_t second_preamble_energy;
+  uint16_t second_preamble_delay_raw;
+  uint16_t second_preamble_offset;
+  uint16_t second_preamble_shift;
+  uint16_t second_preamble_shift_oversampled;
+  uint16_t second_preamble_peak_bin;
+  uint16_t ncs;
+  uint16_t ncs_oversampled;
+  uint16_t n_zc;
+  uint16_t ifft_size;
+  uint8_t prach_format;
+  uint8_t numerology_index;
+  uint8_t prach_sequence_length;
 } rx_prach_out_t;
 rx_prach_out_t rx_nr_prach(const prach_item_t *, int occasion);
 

@@ -10,6 +10,7 @@
 #include "SCHED_NR/sched_nr.h"
 #include "PHY/NR_TRANSPORT/nr_transport_proto.h"
 #include "PHY/NR_TRANSPORT/nr_transport_common_proto.h"
+#include <stdint.h>
 #include "openair1/PHY/NR_TRANSPORT/nr_prach.h"
 
 typedef struct {
@@ -18,6 +19,8 @@ typedef struct {
   int dftlen;
   int N_ZC;
   int k;
+  unsigned int K;
+  uint8_t kbar;
   dft_size_idx_t dftsize;
   int sample_offset_slot;
 } prach_ru_params_t;
@@ -195,6 +198,8 @@ static prach_ru_params_t get_prach_ru_params(prach_item_t *p,
 
   const unsigned int K = get_prach_K(p->prach_sequence_length, p->pdu.prach_format, p->numerology_index, p->mu);
   const uint8_t kbar = get_PRACH_k_bar(p->mu, p->numerology_index);
+  par.K = K;
+  par.kbar = kbar;
 
   int n_ra_prb = p->msg1_frequencystart;
   int k                   = (12*n_ra_prb) - 6*fp->N_RB_UL;
@@ -354,6 +359,31 @@ static void rx_nr_prach_ru_internal(prach_item_t *p,
   c16_t rxsigF_tmp[p->nb_rx][NR_PRACH_SEQ_LEN_L];
   memset(rxsigF_tmp, 0, sizeof(rxsigF_tmp));
 
+  LOG_D(NR_PHY,
+    "[TA_DEBUG][PRACH_WINDOW] %d.%d occ %d startSymbol %d fmt %d seq_len %d mu %d prach_scs %d samples_per_subframe "
+    "%d sample_offset_slot %d N_TA_offset_samples %d Ncp_samples %d dftlen_samples %d reps %d nb_rx %d msg1_freq_start "
+    "%d K %u kbar %u k %d\n",
+    p->frame,
+    p->slot,
+    prachOccasion,
+    prachStartSymbol,
+    p->pdu.prach_format,
+    p->prach_sequence_length,
+    p->numerology_index,
+    p->mu,
+    fp->samples_per_subframe,
+    params.sample_offset_slot,
+    N_TA_offset,
+    params.Ncp,
+    params.dftlen,
+    params.reps,
+    p->nb_rx,
+    p->msg1_frequencystart,
+    params.K,
+    params.kbar,
+    params.k
+  );
+
   const uint8_t num_beams = p->pdu.beamforming.dig_bf_interface;
   // When more than one beams, then each occasion is on one beam
   int ant_offset = 0;
@@ -448,6 +478,14 @@ rx_prach_out_t rx_nr_prach(const prach_item_t *in, int occasion)
 
   int16_t preamble_shift = 0;
   const int dft_sz = N_ZC == 839 ? 1024 : 256;
+  // TA_DEBUG
+  out.ncs = NCS;
+  out.ncs_oversampled = NCS2;
+  out.n_zc = N_ZC;
+  out.ifft_size = dft_sz;
+  out.prach_format = prach_fmt;
+  out.numerology_index = in->numerology_index;
+  out.prach_sequence_length = in->prach_sequence_length;
   int32_t prach_ifft[dft_sz] __attribute__((aligned(32)));
   for (int preamble_index = 0; preamble_index < 64; preamble_index++) {
     if (LOG_DEBUGFLAG(DEBUG_PRACH)) {
@@ -600,18 +638,41 @@ rx_prach_out_t rx_nr_prach(const prach_item_t *in, int occasion)
     int preamble_shift2 = preamble_shift == 0 ? 0 : (preamble_shift << log2_ifft_size) / N_ZC;
 
     for (int i = 0; i < NCS2; i++) {
-      int lev = prach_ifft[preamble_shift2 + i];
+      //int lev = prach_ifft[preamble_shift2 + i];
+      const int peak_bin = preamble_shift2 + i;
+      int lev = prach_ifft[peak_bin];
       int levdB = dB_fixed_times10(lev);
-      if (levdB > out.max_preamble_energy || (levdB == out.max_preamble_energy && out.max_preamble_delay > i)) {
+      //if (levdB > out.max_preamble_energy || (levdB == out.max_preamble_energy && out.max_preamble_delay > i)) {
+        if (levdB > out.max_preamble_energy || (levdB == out.max_preamble_energy && out.max_preamble_delay_raw > i)) {
         LOG_D(NR_PHY_RACH, "preamble_index %d, delay %d en %d dB > %d dB\n", preamble_index, i, levdB, out.max_preamble_energy);
+        out.second_preamble_energy = out.max_preamble_energy;
+        out.second_preamble_delay_raw = out.max_preamble_delay_raw;
+        out.second_preamble = out.max_preamble;
+        out.second_preamble_offset = out.max_preamble_offset;
+        out.second_preamble_shift = out.max_preamble_shift;
+        out.second_preamble_shift_oversampled = out.max_preamble_shift_oversampled;
+        out.second_preamble_peak_bin = out.max_preamble_peak_bin;
         out.max_preamble_energy = levdB;
-        out.max_preamble_delay = i; // Note: This has to be normalized to the 30.72 Ms/s sampling rate
+        //out.max_preamble_delay = i; // Note: This has to be normalized to the 30.72 Ms/s sampling rate
+        out.max_peamble_delay_raw = i;
         out.max_preamble = preamble_index;
+        out.max_preamble_offset = preamble_offset;
+        out.max_preamble_shift = preamble_shift;
+        out.max_preamble_shift_oversampled = preamble_shift2;
+        out.max_preamble_peak_bin = peak_bin;
+      } else if (levdB > out.second_preamble_energy || (levdB == out.second_preamble_energy && out.second_preamble_delay_raw > i)) {
+        out.second_preamble_energy = levdB;
+        out.second_preamble_delay_raw = i;
+        out.second_preamble = preamble_index;
+        out.second_preamble_offset = preamble_offset;
+        out.second_preamble_shift = preamble_shift;
+        out.second_preamble_shift_oversampled = preamble_shift2;
+        out.second_preamble_peak_bin = peak_bin;
       }
     }
   } // preamble_index
 
-  // The conversion from *max_preamble_delay from TA value is done here.
+  // The conversion from raw PRACH delay to TA value is done here.
   // It is normalized to the 30.72 Ms/s, considering the numerology, N_RB and the sampling rate
   // See table 6.3.3.1 -1 and -2 in 38211.
 
@@ -628,12 +689,15 @@ rx_prach_out_t rx_nr_prach(const prach_item_t *in, int occasion)
   // max_preamble_delay * ( (2048/2^mu*(fs/30.72M)) / 256 ) / fs = TA * 16 * 64 / 2^mu * Tc
   int mu = in->numerology_index;
   if (in->prach_sequence_length == 0) {
+    const uint32_t raw_delay = out.max_preamble_delay_raw;
+    const uint32_t mu_scale = 1U << mu;
     if (prach_fmt == 0 || prach_fmt == 1 || prach_fmt == 2)
-      out.max_preamble_delay *= 3 * (1 << mu) / 2;
+      out.max_preamble_delay = (raw_delay * 3U * mu_scale + 1U) / 2U;
     else if (prach_fmt == 3)
-      out.max_preamble_delay *= 3 * (1 << mu) / 8;
-  } else
-    out.max_preamble_delay /= 2;
+      out.max_preamble_delay = (raw_delay * 3U * mu_scale + 4U) / 8U;
+  } else {
+    out.max_preamble_delay = out.max_preamble_delay_raw / 2;
+  }
 
   stop_meas(in->rx_prach);
   return out;

@@ -225,8 +225,31 @@ void ue_ta_procedures(PHY_VARS_NR_UE *ue, int slot_tx, int frame_tx)
     // = 16 * ofdm_symbol_size / 2048
     uint16_t bw_scaling = 16 * ofdm_symbol_size / 2048;
 
-    ue->timing_advance += (ue->ta_command - 31) * bw_scaling;
-    //LOG_ME(PHY, "sample_advance equiv: %d\n", (ue->ta_command-31)*bw_scaling); //ALEX added
+    //ue->timing_advance += (ue->ta_command - 31) * bw_scaling;
+    const int timing_advance_before = ue->timing_advance;
+    const bool ta_command_is_rar = ue->ta_command_is_rar;
+    const int ta_units = ta_command_is_rar ? ue->ta_command : ue->ta_command - 31;
+    const int ta_samples = ta_units * bw_scaling;
+    if (ta_command_is_rar)
+      ue->timing_advance = ta_samples;
+    else
+      ue->timing_advance += ta_samples;
+
+    LOG_D(PHY,
+          "[TA_DEBUG][UE_TA_APPLY] UE %d %d.%d is_rar %d ta_command %u ta_units %d bw_scaling_samples_per_ta %u "
+          "ta_samples %d timing_advance_before %d timing_advance_after %d ofdm_symbol_size %u N_TA_offset %d\n",
+          ue->Mod_id,
+          frame_tx,
+          slot_tx,
+          ta_command_is_rar,
+          ue->ta_command,
+          ta_units,
+          bw_scaling,
+          ta_samples,
+          timing_advance_before,
+          ue->timing_advance,
+          ofdm_symbol_size,
+          ue->N_TA_offset);
 
     LOG_D(PHY,
           "[UE %d] [%d.%d] Got timing advance command %u from MAC, new value is %d\n",
@@ -238,6 +261,7 @@ void ue_ta_procedures(PHY_VARS_NR_UE *ue, int slot_tx, int frame_tx)
 
     ue->ta_frame = -1;
     ue->ta_slot = -1;
+    ue->ta_command_is_rar = false;
   }
 }
 

@@ -23,7 +23,75 @@
 
 #include <executables/softmodem-common.h>
 
-static const float ssb_per_rach_occasion[8] = {0.125, 0.25, 0.5, 1, 2, 4, 8};
+typedef struct {
+  bool checked; // Validator covers this RA case.
+  bool valid; // RAPID accepted, or case unchecked.
+  uint16_t first_valid_rapid; // First accepted RAPID for this RO.
+  uint16_t num_valid_rapids; // Number of accepted consecutive RAPIDs.
+  int ssb_ordinal; // Index into cc->ssb_index[], or -1.
+  int prach_occasion_id; // PRACH occasion id, or -1.
+  const char *reason; // Static debug-log reason.
+} nr_rapid_check_t;
+
+static nr_rapid_check_t check_rapid_for_prach_occasion(gNB_MAC_INST *nr_mac,
+                                                       int CC_id,
+                                                       frame_t frame,
+                                                       int slot,
+                                                       uint16_t preamble_index,
+                                                       uint8_t freq_index,
+                                                       uint8_t symbol)
+{
+  nr_rapid_check_t check = {
+      .checked = false,
+      .valid = true,
+      .first_valid_rapid = 0,
+      .num_valid_rapids = 0,
+      .ssb_ordinal = -1,
+      .prach_occasion_id = -1,
+      .reason = "unchecked",
+  };
+
+  UNUSED(frame);
+  UNUSED(slot);
+  UNUSED(freq_index);
+  UNUSED(symbol);
+
+  NR_COMMON_channels_t *cc = &nr_mac->common_channels[CC_id];
+  NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
+  NR_BWP_UplinkCommon_t *initialUplinkBWP = scc->uplinkConfigCommon->initialUplinkBWP;
+
+  if (initialUplinkBWP->ext1 && initialUplinkBWP->ext1->msgA_ConfigCommon_r16) {
+    check.reason = "msgA_not_checked";
+    return check;
+  }
+
+  NR_RACH_ConfigCommon_t *rach_ConfigCommon = initialUplinkBWP->rach_ConfigCommon->choice.setup;
+  ssb_ro_preambles_t ssb_ro = get_ssb_ro_preambles_4step(rach_ConfigCommon->ssb_perRACH_OccasionAndCB_PreamblesPerSSB);
+
+  /*
+   * First implementation validates the non-shared RO case. For shared ROs,
+   * preserve existing behavior until SSB/RO-specific RAPID partitioning is added.
+   */
+  if (ssb_ro.ssb_per_ro > 1) {
+    check.reason = "shared_ro_not_checked";
+    return check;
+  }
+
+  if (ssb_ro.preambles_per_ssb <= 0) {
+    check.reason = "invalid_cb_preambles";
+    return check;
+  }
+
+  const uint16_t total_ra_preambles =
+      rach_ConfigCommon->totalNumberOfRA_Preambles ? *rach_ConfigCommon->totalNumberOfRA_Preambles : MAX_NUM_NR_PRACH_PREAMBLES;
+  const uint16_t num_valid_rapids = min(ssb_ro.preambles_per_ssb, (int)total_ra_preambles);
+
+  check.checked = true;
+  check.num_valid_rapids = num_valid_rapids;
+  check.valid = preamble_index < num_valid_rapids;
+  check.reason = check.valid ? "valid_cbra_rapid" : "rapid_outside_cbra_range";
+  return check;
+}
 
 static int16_t ssb_index_from_prach(module_id_t module_idP,
                                     frame_t frameP,
@@ -43,8 +111,9 @@ static int16_t ssb_index_from_prach(module_id_t module_idP,
   uint8_t total_RApreambles = MAX_NUM_NR_PRACH_PREAMBLES;
   if (rach_ConfigCommon->totalNumberOfRA_Preambles != NULL)
     total_RApreambles = *rach_ConfigCommon->totalNumberOfRA_Preambles;
-  
-  float  num_ssb_per_RO = ssb_per_rach_occasion[cfg->prach_config.ssb_per_rach.value];	
+
+  ssb_ro_preambles_t ssb_ro = get_ssb_ro_preambles_4step(rach_ConfigCommon->ssb_perRACH_OccasionAndCB_PreamblesPerSSB);
+  float num_ssb_per_RO = ssb_ro.ssb_per_ro;
   uint16_t start_symbol_index = 0;
   uint8_t temp_start_symbol = 0;
   uint16_t RA_sfn_index = -1;
@@ -114,43 +183,14 @@ void find_SSB_and_RO_available(gNB_MAC_INST *nrmac)
   uint16_t unused_RA_occasion, repetition = 0;
   uint8_t num_active_ssb = 0;
 
-  struct NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB *ssb_perRACH_OccasionAndCB_PreamblesPerSSB = rach_ConfigCommon->ssb_perRACH_OccasionAndCB_PreamblesPerSSB;
-
-  switch (ssb_perRACH_OccasionAndCB_PreamblesPerSSB->present) {
-    case NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB_PR_oneEighth:
-      cc->cb_preambles_per_ssb = 4 * (ssb_perRACH_OccasionAndCB_PreamblesPerSSB->choice.oneEighth + 1);
-      break;
-    case NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB_PR_oneFourth:
-      cc->cb_preambles_per_ssb = 4 * (ssb_perRACH_OccasionAndCB_PreamblesPerSSB->choice.oneFourth + 1);
-      break;
-    case NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB_PR_oneHalf:
-      cc->cb_preambles_per_ssb = 4 * (ssb_perRACH_OccasionAndCB_PreamblesPerSSB->choice.oneHalf + 1);
-      break;
-    case NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB_PR_one:
-      cc->cb_preambles_per_ssb = 4 * (ssb_perRACH_OccasionAndCB_PreamblesPerSSB->choice.one + 1);
-      break;
-    case NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB_PR_two:
-      cc->cb_preambles_per_ssb = 4 * (ssb_perRACH_OccasionAndCB_PreamblesPerSSB->choice.two + 1);
-      break;
-    case NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB_PR_four:
-      cc->cb_preambles_per_ssb = ssb_perRACH_OccasionAndCB_PreamblesPerSSB->choice.four;
-      break;
-    case NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB_PR_eight:
-      cc->cb_preambles_per_ssb = ssb_perRACH_OccasionAndCB_PreamblesPerSSB->choice.eight;
-      break;
-    case NR_RACH_ConfigCommon__ssb_perRACH_OccasionAndCB_PreamblesPerSSB_PR_sixteen:
-      cc->cb_preambles_per_ssb = ssb_perRACH_OccasionAndCB_PreamblesPerSSB->choice.sixteen;
-      break;
-    default:
-      AssertFatal(1 == 0, "Unsupported ssb_perRACH_config %d\n", ssb_perRACH_OccasionAndCB_PreamblesPerSSB->present);
-      break;
-  }
+  ssb_ro_preambles_t ssb_ro = get_ssb_ro_preambles_4step(rach_ConfigCommon->ssb_perRACH_OccasionAndCB_PreamblesPerSSB);
+  cc->cb_preambles_per_ssb = ssb_ro.preambles_per_ssb;
 
   // prach is scheduled according to configuration index and tables 6.3.3.2.2 to 6.3.3.2.4
   frequency_range_t freq_range = get_freq_range_from_arfcn(scc->downlinkConfigCommon->frequencyInfoDL->absoluteFrequencyPointA);
   nr_prach_info_t prach_info =  get_nr_prach_occasion_info_from_index(config_index, freq_range, cc->frame_type);
 
-  float num_ssb_per_RO = ssb_per_rach_occasion[cfg->prach_config.ssb_per_rach.value];	
+  float num_ssb_per_RO = ssb_ro.ssb_per_ro;
   uint8_t fdm = cfg->prach_config.num_prach_fd_occasions.value;
   uint64_t L_ssb = (((uint64_t) cfg->ssb_table.ssb_mask_list[0].ssb_mask.value) << 32) | cfg->ssb_table.ssb_mask_list[1].ssb_mask.value;
   cc->total_prach_occasions_per_config_period = prach_info.N_RA_sfn * prach_info.N_t_slot * prach_info.N_RA_slot * fdm;
@@ -371,6 +411,7 @@ void schedule_nr_prach(module_id_t module_idP, frame_t frameP, slot_t slotP)
       NR_beam_alloc_t beam = {0};
       uint32_t N_t_slot = cc->prach_info.N_t_slot;
       uint32_t start_symb = cc->prach_info.start_symbol;
+      const float num_ssb_per_RO = get_ssb_ro_preambles_4step(rach_ConfigCommon->ssb_perRACH_OccasionAndCB_PreamblesPerSSB).ssb_per_ro;
       for (int fdm_index = 0; fdm_index < fdm; fdm_index++) { // one structure per frequency domain occasion
         AssertFatal(UL_tti_req->n_pdus < sizeofArray(UL_tti_req->pdus_list), "Invalid UL_tti_req->n_pdus %d\n", UL_tti_req->n_pdus);
         nfapi_nr_ul_tti_request_number_of_pdus_t *newpdu = UL_tti_req->pdus_list + UL_tti_req->n_pdus;
@@ -390,7 +431,6 @@ void schedule_nr_prach(module_id_t module_idP, frame_t frameP, slot_t slotP)
             continue;
 
           num_td_occ++;
-          float num_ssb_per_RO = ssb_per_rach_occasion[cfg->prach_config.ssb_per_rach.value];
           int beam_index = 0;
           if(num_ssb_per_RO <= 1) {
             // ordered ssb number
@@ -693,6 +733,33 @@ void nr_initiate_ra_proc(module_id_t module_idP,
     return;
   }
 
+  /*
+   * For unknown-UE four-step CBRA, reject RAPIDs outside the configured
+   * contention-based preamble set before allocating a TC-RNTI.
+   */
+  if (!UE) {
+    nr_rapid_check_t rapid_check = check_rapid_for_prach_occasion(nr_mac, CC_id, frame, slot, preamble_index, freq_index, symbol);
+    LOG_A(NR_MAC,
+          "[TA_DEBUG][RAPID_CHECK] %d.%d preamble_index %u symbol %u freq_index %u checked %d valid %d "
+          "first_valid_rapid %u num_valid_rapids %u ssb_ordinal %d prach_occasion_id %d reason %s\n",
+          frame,
+          slot,
+          preamble_index,
+          symbol,
+          freq_index,
+          rapid_check.checked,
+          rapid_check.valid,
+          rapid_check.first_valid_rapid,
+          rapid_check.num_valid_rapids,
+          rapid_check.ssb_ordinal,
+          rapid_check.prach_occasion_id,
+          rapid_check.reason);
+    if (rapid_check.checked && !rapid_check.valid) {
+      NR_SCHED_UNLOCK(&nr_mac->sched_lock);
+      return;
+    }
+  }
+
   if (!UE) {
     /* in CBRA: we don't know this UE yet. There might be CFRA (e.g., HO IN SA)
      * where we know the UE */
@@ -731,6 +798,19 @@ void nr_initiate_ra_proc(module_id_t module_idP,
   uint8_t ul_carrier_id = 0; // 0 for NUL 1 for SUL
   uint32_t slot_RA = get_slot_RA(scc, rach_ConfigCommon, msgacc, cc->frame_type, slot);
   ra->RA_rnti = nr_get_ra_rnti(symbol, slot_RA, freq_index, ul_carrier_id);
+  LOG_D(NR_MAC,
+    "[TA_DEBUG][RA_INIT] %d.%d preamble_index %u symbol %u freq_index %u slot_RA %u timing_offset_ta_units %d "
+    "RA_RNTI 0x%x TC_RNTI 0x%04x msg3_TPC %d\n",
+    frame,
+    slot,
+    preamble_index,
+    symbol,
+    freq_index,
+    slot_RA,
+    timing_offset,
+    ra->RA_rnti,
+    UE->rnti,
+    ra->msg3_TPC);
   if (msgacc) {
     ra->ra_type = RA_2_STEP;
     ra->ra_state = nrRA_WAIT_MsgA_PUSCH;
@@ -1114,6 +1194,18 @@ static void nr_fill_rar(NR_UE_info_t *UE, uint8_t *dlsch_buffer, nfapi_nr_pusch_
   // TA command
   rar->TA1 = (uint8_t) (ra->timing_offset >> 5);    // 7 MSBs of timing advance
   rar->TA2 = (uint8_t) (ra->timing_offset & 0x1f);  // 5 LSBs of timing advance
+  const int rar_ta = rar->TA2 + (rar->TA1 << 5);
+  LOG_A(NR_MAC,
+        "[TA_DEBUG][RAR_ENCODE] msg2 %d.%d preamble_index %u timing_offset_ta_units %d TA1 %u TA2 %u encoded_ta %d "
+        "TC_RNTI 0x%04x\n",
+        ra->Msg2_frame,
+        ra->Msg2_slot,
+        ra->preamble_index,
+        ra->timing_offset,
+        rar->TA1,
+        rar->TA2,
+        rar_ta,
+        UE->rnti);
 
   // TC-RNTI
   rar->TCRNTI_1 = (uint8_t) (UE->rnti >> 8);        // 8 MSBs of rnti
@@ -1156,7 +1248,7 @@ static void nr_fill_rar(NR_UE_info_t *UE, uint8_t *dlsch_buffer, nfapi_nr_pusch_
         __FUNCTION__,
         rar->UL_GRANT_3 & 0x0f,
         (rar->UL_GRANT_3 >> 4) | (rar->UL_GRANT_2 << 4) | ((rar->UL_GRANT_1 & 0x03) << 12),
-        rar->TA2 + (rar->TA1 << 5),
+        rar_ta,
         rar->UL_GRANT_4 >> 4,
         rar->UL_GRANT_1 >> 2,
         ra->msg3_TPC,
@@ -1662,7 +1754,8 @@ static void nr_generate_Msg2(module_id_t module_idP,
   // T_c according to 38.211 4.1
   float T_c_ns = 0.509;
   int numerology = ul_bwp->scs;
-  float rtt_ns = T_c_ns * 16 * 64 / (1 << numerology) * ra->timing_offset;
+  float ta_unit_ns = T_c_ns * 16 * 64 / (1 << numerology);
+  float rtt_ns = ta_unit_ns * ra->timing_offset;
   float distance_in_meters = (float) SPEED_OF_LIGHT * rtt_ns / 1000 / 1000 / 1000 / 2;
   LOG_A(NR_MAC,
         "UE %04x: %d.%d Generating RA-Msg2 DCI, RA RNTI 0x%x, state %d, preamble_index(RAPID) %d, "
@@ -1675,6 +1768,17 @@ static void nr_generate_Msg2(module_id_t module_idP,
         ra->preamble_index,
         ra->timing_offset,
         distance_in_meters);
+  LOG_D(NR_MAC,
+    "[TA_DEBUG][RAR_DISTANCE] UE %04x %d.%d numerology %d ta_unit_ns %.3f timing_offset_ta_units %d rtt_ns %.3f "
+    "distance_m %.1f\n",
+    UE->rnti,
+    frameP,
+    slotP,
+    numerology,
+    ta_unit_ns,
+    ra->timing_offset,
+    rtt_ns,
+    distance_in_meters);
 
   // SCF222: PDU index incremented for each PDSCH PDU sent in TX control message. This is used to associate control
   // information to data and is reset every slot.
