@@ -654,7 +654,7 @@ rx_prach_out_t rx_nr_prach(const prach_item_t *in, int occasion)
         out.second_preamble_peak_bin = out.max_preamble_peak_bin;
         out.max_preamble_energy = levdB;
         //out.max_preamble_delay = i; // Note: This has to be normalized to the 30.72 Ms/s sampling rate
-        out.max_peamble_delay_raw = i;
+        out.max_preamble_delay_raw = i;
         out.max_preamble = preamble_index;
         out.max_preamble_offset = preamble_offset;
         out.max_preamble_shift = preamble_shift;

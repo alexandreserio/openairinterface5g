@@ -50,88 +50,86 @@ void L1_nr_prach_procedures(PHY_VARS_gNB *gNB, prach_item_t *prach_id, nfapi_nr_
           res.max_preamble_delay,
           gNB->prach_energy_counter);
 
-    if ((gNB->prach_energy_counter == NUM_PRACH_RX_FOR_NOISE_ESTIMATE)
-        && (res.max_preamble_energy > gNB->measurements.prach_I0 + gNB->prach_thres)
-        && (rach_ind->number_of_pdus < MAX_NUM_NR_RX_RACH_PDUS)) {
-      const bool prach_noise_ready = gNB->prach_energy_counter == NUM_PRACH_RX_FOR_NOISE_ESTIMATE;
-      const bool prach_above_threshold = res.max_preamble_energy > gNB->measurements.prach_I0 + gNB->prach_thres;
-      const bool prach_ind_has_space = rach_ind->number_of_pdus < MAX_NUM_NR_RX_RACH_PDUS;
-      const bool prach_accepted = prach_noise_ready && prach_above_threshold && prach_ind_has_space;
-      LOG_D(NR_PHY,
-        "[TA_DEBUG][PRACH_DETECT] %d.%d occ %d startSymbol %u fmt %u seq_len %u mu %u N_ZC %u NCS %u NCS2 %u "
-        "ifft %u RAPID %u raw_delay %u norm_ta %u peak_bin %u preamble_offset %u preamble_shift %u "
-        "preamble_shift2 %u energy %d.%d dB I0 %d.%d dB thres %d noise_counter %d accepted %d second_RAPID %u "
-        "second_raw_delay %u second_energy %d.%d dB second_peak_bin %u second_preamble_offset %u second_preamble_shift %u "
-        "second_preamble_shift2 %u\n",
-        frame,
-        slot,
-        prach_oc,
-        prachStartSymbol,
-        res.prach_format,
-        res.prach_sequence_length,
-        res.numerology_index,
-        res.n_zc,
-        res.ncs,
-        res.ncs_oversampled,
-        res.ifft_size,
-        res.max_preamble,
-        res.max_preamble_delay_raw,
-        res.max_preamble_delay,
-        res.max_preamble_peak_bin,
-        res.max_preamble_offset,
-        res.max_preamble_shift,
-        res.max_preamble_shift_oversampled,
-        res.max_preamble_energy / 10,
-        res.max_preamble_energy % 10,
-        gNB->measurements.prach_I0 / 10,
-        gNB->measurements.prach_I0 % 10,
-        gNB->prach_thres,
-        gNB->prach_energy_counter,
-        prach_accepted,
-        res.second_preamble,
-        res.second_preamble_delay_raw,
-        res.second_preamble_energy / 10,
-        res.second_preamble_energy % 10,
-        res.second_preamble_peak_bin,
-        res.second_preamble_offset,
-        res.second_preamble_shift,
-        res.second_preamble_shift_oversampled);
+    const bool prach_noise_ready = gNB->prach_energy_counter == NUM_PRACH_RX_FOR_NOISE_ESTIMATE;
+    const bool prach_above_threshold = res.max_preamble_energy > gNB->measurements.prach_I0 + gNB->prach_thres;
+    const bool prach_ind_has_space = rach_ind->number_of_pdus < MAX_NUM_NR_RX_RACH_PDUS;
+    const bool prach_accepted = prach_noise_ready && prach_above_threshold && prach_ind_has_space;
+    LOG_D(NR_PHY,
+      "[TA_DEBUG][PRACH_DETECT] %d.%d occ %d startSymbol %u fmt %u seq_len %u mu %u N_ZC %u NCS %u NCS2 %u "
+      "ifft %u RAPID %u raw_delay %u norm_ta %u peak_bin %u preamble_offset %u preamble_shift %u "
+      "preamble_shift2 %u energy %d.%d dB I0 %d.%d dB thres %d noise_counter %d accepted %d second_RAPID %u "
+      "second_raw_delay %u second_energy %d.%d dB second_peak_bin %u second_preamble_offset %u second_preamble_shift %u "
+      "second_preamble_shift2 %u\n",
+      frame,
+      slot,
+      prach_oc,
+      prachStartSymbol,
+      res.prach_format,
+      res.prach_sequence_length,
+      res.numerology_index,
+      res.n_zc,
+      res.ncs,
+      res.ncs_oversampled,
+      res.ifft_size,
+      res.max_preamble,
+      res.max_preamble_delay_raw,
+      res.max_preamble_delay,
+      res.max_preamble_peak_bin,
+      res.max_preamble_offset,
+      res.max_preamble_shift,
+      res.max_preamble_shift_oversampled,
+      res.max_preamble_energy / 10,
+      res.max_preamble_energy % 10,
+      gNB->measurements.prach_I0 / 10,
+      gNB->measurements.prach_I0 % 10,
+      gNB->prach_thres,
+      gNB->prach_energy_counter,
+      prach_accepted,
+      res.second_preamble,
+      res.second_preamble_delay_raw,
+      res.second_preamble_energy / 10,
+      res.second_preamble_energy % 10,
+      res.second_preamble_peak_bin,
+      res.second_preamble_offset,
+      res.second_preamble_shift,
+      res.second_preamble_shift_oversampled
+    );
 
-      if (prach_accepted) {
-        LOG_A(NR_PHY,
-            "[RAPROC] %d.%d Initiating RA procedure with preamble %d, energy %d.%d dB (I0 %d, thres %d), delay %d start symbol "
-            "%u freq index %u\n",
-            frame,
-            slot,
-            res.max_preamble,
-            res.max_preamble_energy / 10,
-            res.max_preamble_energy % 10,
-            gNB->measurements.prach_I0,
-            gNB->prach_thres,
-            res.max_preamble_delay,
-            prachStartSymbol,
-            prach_pdu->num_ra);
+    if (prach_accepted) {
+      LOG_A(NR_PHY,
+          "[RAPROC] %d.%d Initiating RA procedure with preamble %d, energy %d.%d dB (I0 %d, thres %d), delay %d start symbol "
+          "%u freq index %u\n",
+          frame,
+          slot,
+          res.max_preamble,
+          res.max_preamble_energy / 10,
+          res.max_preamble_energy % 10,
+          gNB->measurements.prach_I0,
+          gNB->prach_thres,
+          res.max_preamble_delay,
+          prachStartSymbol,
+          prach_pdu->num_ra);
 
-        T(T_ENB_PHY_INITIATE_RA_PROCEDURE,
-          T_INT(gNB->Mod_id),
-          T_INT(frame),
-          T_INT(slot),
-          T_INT(res.max_preamble),
-          T_INT(res.max_preamble_energy),
-          T_INT(res.max_preamble_delay));
+      T(T_ENB_PHY_INITIATE_RA_PROCEDURE,
+        T_INT(gNB->Mod_id),
+        T_INT(frame),
+        T_INT(slot),
+        T_INT(res.max_preamble),
+        T_INT(res.max_preamble_energy),
+        T_INT(res.max_preamble_delay));
 
-        nfapi_nr_prach_indication_pdu_t *ind = rach_ind->pdu_list + rach_ind->number_of_pdus;
-        *ind = (nfapi_nr_prach_indication_pdu_t){
-            .phy_cell_id = gNB->gNB_config.cell_config.phy_cell_id.value,
-            .symbol_index = prachStartSymbol,
-            .slot_index = slot,
-            .freq_index = prach_pdu->num_ra,
-            .avg_rssi = (res.max_preamble_energy < 631) ? (128 + (res.max_preamble_energy / 5)) : 254,
-            .avg_snr = 0xff, // invalid for now
-            .num_preamble = 1,
-            .preamble_list = {{.preamble_index = res.max_preamble, .timing_advance = res.max_preamble_delay, .preamble_pwr = 0xffffffff}}
-        };
-        rach_ind->number_of_pdus++;
+      nfapi_nr_prach_indication_pdu_t *ind = rach_ind->pdu_list + rach_ind->number_of_pdus;
+      *ind = (nfapi_nr_prach_indication_pdu_t){
+          .phy_cell_id = gNB->gNB_config.cell_config.phy_cell_id.value,
+          .symbol_index = prachStartSymbol,
+          .slot_index = slot,
+          .freq_index = prach_pdu->num_ra,
+          .avg_rssi = (res.max_preamble_energy < 631) ? (128 + (res.max_preamble_energy / 5)) : 254,
+          .avg_snr = 0xff, // invalid for now
+          .num_preamble = 1,
+          .preamble_list = {{.preamble_index = res.max_preamble, .timing_advance = res.max_preamble_delay, .preamble_pwr = 0xffffffff}}
+      };
+      rach_ind->number_of_pdus++;
     }
     gNB->measurements.prach_I0 = ((gNB->measurements.prach_I0 * 900) >> 10) + ((res.max_preamble_energy * 124) >> 10);
     if (frame == 0)

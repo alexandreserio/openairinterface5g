@@ -109,7 +109,7 @@ static void configure_ta_command(PHY_VARS_NR_UE *ue, fapi_nr_ta_command_pdu *ta_
     ue->ta_slot = ta_command_pdu->ta_slot;
     ue->ta_frame = ta_command_pdu->ta_frame;
     //ue->ta_command = ta_command_pdu->ta_command + 31; // To use TA adjustment algo in ue_ta_procedures()
-    ue->ta_command = ta_command_pdu->ta_command
+    ue->ta_command = ta_command_pdu->ta_command;
   } else {
     ue->ta_slot = (ta_command_pdu->ta_slot + ul_tx_timing_adjustment) % slots_per_frame;
     if (ta_command_pdu->ta_slot + ul_tx_timing_adjustment > slots_per_frame)
