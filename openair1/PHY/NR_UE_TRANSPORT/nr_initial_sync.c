@@ -346,7 +346,7 @@ static void nr_scan_ssb(void *arg)
           ssbInfo->syncRes.rx_offset);
 #endif
     ssbInfo->freqOffset += search_params.pss_res.freq_offset + search_params.sss_res.freq_offset;
-
+    LOG_ME(PHY, "SSB freqOffset measured: %d\n", ssbInfo->freqOffset); //ALEX DEBUG LOG
     if (ssbInfo->syncRes.cell_detected) { // we got sss channel
       ssbInfo->syncRes.cell_detected = nr_pbch_detection(ssbInfo->proc,
                                                          ssbInfo->fp,
@@ -361,7 +361,6 @@ static void nr_scan_ssb(void *arg)
       if (ssbInfo->syncRes.cell_detected) {
         uint32_t rsrp_avg = nr_ue_calculate_ssb_rsrp(ssbInfo->fp, rxdataF[2], ssbInfo->gscnInfo.ssbFirstSC);
         int rsrp_db_per_re = 10 * log10(rsrp_avg);
-        LOG_ME(PHY, "SCAN SSB...\n");  //ALEX DEBUG
         ssbInfo->adjust_rxgain = TARGET_RX_POWER - rsrp_db_per_re;
         LOG_A(PHY, "pbch rx ok. rsrp:%d dB/RE, adjust_rxgain:%d dB\n", rsrp_db_per_re, ssbInfo->adjust_rxgain); //ALEX changed I to A
       }
@@ -448,7 +447,6 @@ nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
     fp->ssb_index = res->ssbIndex;
     ue->symbol_offset = res->symbolOffset;
     ue->common_vars.freq_offset = res->freqOffset;
-    LOG_ME(PHY, "INITIAL SYNC...\n");  //ALEX DEBUG
     ue->adjust_rxgain = res->adjust_rxgain;
   }
 
@@ -485,6 +483,7 @@ nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
     // for a correct computation of frame number to sync with the one decoded at MIB we need to take into account in which of
     // the n_frames we got sync
     ue->init_sync_frame = n_frames - 1 - res->syncRes.frame_id;
+    LOG_ME(PHY, "init_sync_frame (before shift): %d\n", ue->init_sync_frame); //ALEX DEBUG LOG
 
     // we also need to take into account the shift by samples_per_frame in case the if is true
     if (res->ssbOffset < sync_pos_frame) {
@@ -493,6 +492,7 @@ nr_initial_sync_t nr_initial_sync(UE_nr_rxtx_proc_t *proc,
     } else {
       res->syncRes.rx_offset = res->ssbOffset - sync_pos_frame;
     }
+    LOG_ME(PHY, "init_sync_frame (shifted): %d\n", ue->init_sync_frame); //ALEX DEBUG LOG
 
     LOG_I(PHY, "[UE%d] In synch, rx_offset %d samples\n", ue->Mod_id, res->syncRes.rx_offset);
     LOG_I(PHY, "[UE %d] Measured Carrier Frequency offset %d Hz\n", ue->Mod_id, res->freqOffset);

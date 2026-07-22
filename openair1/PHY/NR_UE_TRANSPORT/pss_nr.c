@@ -95,6 +95,7 @@ void generate_pss_nr_time(int ofdm_symbol_size,
   unsigned int k = first_carrier_offset + ssbFirstSCS + subcarrier_start;
   int16_t pss[LENGTH_PSS_NR];
   generate_pss_nr(N_ID_2, pss);
+  LOG_D(PHY, "First carrier offset: %d || SSB First subcarrier: %d || PSS subcarrier start: %d || k = %d\n", first_carrier_offset, ssbFirstSCS, subcarrier_start, k); //ALEX DEBUG LOG
   for (int i=0; i < LENGTH_PSS_NR; i++) {
     if (k >= ofdm_symbol_size)
       k -= ofdm_symbol_size;
@@ -241,7 +242,7 @@ pss_detection_result_t pss_search_time_nr(const pss_search_t *p)
 #endif
   }
 
-  LOG_D(PHY,
+  LOG_ME(PHY,
         "[UE] nr_synchro_time: Sync source (nid2) = %d, Peak found at pos %d, val = %ld (%d dB power over signal avg %d dB), ffo "
         "%lf\n",
         pss_source,
