@@ -43,6 +43,8 @@ Options:
    Sets build directory (will be <oai-root>/cmake_targets/<build-dir>/build)
 --build-e2
    Enable the the E2 Agent
+--build-e3
+   Enable the the E3 Agent
 -I | --install-external-packages
    Installs required packages such as LibXML, asn1.1 compiler, ...
    This option will require root password
@@ -141,6 +143,10 @@ function main() {
             shift 2;;
        --build-e2 )
              CMAKE_CMD="$CMAKE_CMD -DE2_AGENT=ON"
+             shift
+             ;;
+       --build-e3 )
+             CMAKE_CMD="$CMAKE_CMD -DE3_AGENT=ON"
              shift
              ;;
        -I | --install-external-packages)
@@ -278,7 +284,7 @@ function main() {
             SIMUS_PHY=1
             CMAKE_CMD="$CMAKE_CMD -DENABLE_PHYSIM_TESTS=ON"
             # TODO: fix: dlsim_tm4 pucchsim prachsim pdcchsim pbchsim mbmssim
-            TARGET_LIST="$TARGET_LIST dlsim ulsim ldpctest polartest smallblocktest nr_pbchsim nr_dlschsim nr_ulschsim nr_dlsim nr_ulsim nr_pucchsim nr_prachsim nr_psbchsim nr_srssim"
+            TARGET_LIST="$TARGET_LIST dlsim ulsim ldpctest polartest smallblocktest nr_pbchsim nr_dlschsim nr_ulschsim nr_dlsim nr_ulsim nr_pucchsim nr_prachsim nr_psbchsim nr_srssim nr_ulsim_mu_mimo"
             echo_info "Will compile dlsim, ulsim, ..."
             shift;;
        -V | --vcd)

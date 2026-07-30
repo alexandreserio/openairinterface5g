@@ -64,10 +64,10 @@ int set_transport(openair0_device_t *device)
   }
 }
 
-typedef int (*devfunc_t)(openair0_device_t *, openair0_config_t *, eth_params_t *);
+typedef int (*devfunc_t)(openair0_device_t *, openair0_config_t *);
 
 /* look for the interface library and load it */
-int load_lib(openair0_device_t *device, openair0_config_t *openair0_cfg, eth_params_t *cfg, uint8_t flag)
+int load_lib(openair0_device_t *device, openair0_config_t *openair0_cfg, uint8_t flag)
 {
   loader_shlibfunc_t shlib_fdesc[1];
   int ret=0;
@@ -111,13 +111,13 @@ int load_lib(openair0_device_t *device, openair0_config_t *openair0_cfg, eth_par
   AssertFatal( (ret >= 0),
   	           "Library %s couldn't be loaded\n",devname);
 
-  return ((devfunc_t)shlib_fdesc[0].fptr)(device,openair0_cfg,cfg);
+  return ((devfunc_t)shlib_fdesc[0].fptr)(device,openair0_cfg);
 }
 
 int openair0_device_load(openair0_device_t *device, openair0_config_t *openair0_cfg)
 {
   int rc=0;
-  rc=load_lib(device, openair0_cfg, NULL,RAU_LOCAL_RADIO_HEAD );
+  rc=load_lib(device, openair0_cfg, RAU_LOCAL_RADIO_HEAD);
 
   if ( rc >= 0) {
     if ( set_device(device) < 0) {
@@ -132,10 +132,10 @@ int openair0_device_load(openair0_device_t *device, openair0_config_t *openair0_
   return rc;
 }
 
-int openair0_transport_load(openair0_device_t *device, openair0_config_t *openair0_cfg, eth_params_t *eth_params)
+int openair0_transport_load(openair0_device_t *device, openair0_config_t *openair0_cfg)
 {
   int rc;
-  rc=load_lib(device, openair0_cfg, eth_params, RAU_REMOTE_RADIO_HEAD);
+  rc=load_lib(device, openair0_cfg, RAU_REMOTE_RADIO_HEAD);
 
   if ( rc >= 0) {
     if ( set_transport(device) < 0) {
@@ -145,19 +145,6 @@ int openair0_transport_load(openair0_device_t *device, openair0_config_t *openai
   }
 
   return rc;
-}
-
-int openair0_load(openair0_device_t *device, char *name, openair0_config_t *openair0_cfg, eth_params_t *eth_params)
-{
-  loader_shlibfunc_t shlib_fdesc[1];
-  int ret = 0;
-
-  shlib_fdesc[0].fname = eth_params == NULL ? "device_init" : "transport_init";
-
-  ret = load_module_shlib(name, shlib_fdesc, 1, NULL);
-  AssertFatal((ret >= 0), "Library %s couldn't be loaded\n", name);
-
-  return ((devfunc_t)shlib_fdesc[0].fptr)(device, openair0_cfg, eth_params);
 }
 
 static void writerEnqueue(re_order_t *ctx, openair0_timestamp_t timestamp, void **txp, int nsamps, int nbAnt, int flags)
