@@ -343,7 +343,7 @@ int32_t write_file_matlab(const char *fname,
     T(T_LEGACY_##c##_ERROR, T_PRINTF(x));                                 \
     if (T_stdout) {                                                       \
       if (g_log->log_component[c].level >= OAILOG_ERR)                    \
-        logRecord_mt(__FILE__, __FUNCTION__, __LINE__, c, OAILOG_ERR, x); \
+        logRecord_mt(__FILE__, __FUNCTION__, __LINE__, c, OAILOG_ERR, "[ERROR] " x); \
     }                                                                     \
   } while (0)
 
@@ -444,7 +444,7 @@ int32_t write_file_matlab(const char *fname,
 #define LOG_E(c, x...)                                                     \
   do {                                                                     \
     if (g_log->log_component[c].level >= OAILOG_ERR) {                     \
-      logRecord_lttng(__FILE__, __FUNCTION__, __LINE__, c, OAILOG_ERR, x); \
+      logRecord_lttng(__FILE__, __FUNCTION__, __LINE__, c, OAILOG_ERR, "[ERROR]" x); \
     }                                                                      \
   } while (0)
 #define LOG_ME(c, x...)                                                     \
@@ -492,7 +492,7 @@ int32_t write_file_matlab(const char *fname,
 #define LOG_E(c, x...)                                                  \
   do {                                                                  \
     if (g_log->log_component[c].level >= OAILOG_ERR)                    \
-      logRecord_mt(__FILE__, __FUNCTION__, __LINE__, c, OAILOG_ERR, x); \
+      logRecord_mt(__FILE__, __FUNCTION__, __LINE__, c, OAILOG_ERR, "[ERROR] " x); \
   } while (0)
 
 #define LOG_ME(c, x...)                                                \
