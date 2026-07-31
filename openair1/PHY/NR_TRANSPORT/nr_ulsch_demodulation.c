@@ -1077,7 +1077,7 @@ int nr_rx_pusch_group_tp(PHY_VARS_gNB *gNB,
 
   join_task_ans(&ans);
 
-  iq_fifo_write_pusch_frame(pusch_vars, rel15_ul, end_symbol);
+  iq_fifo_write_pusch_frame(joint_pv, rel15_ul_ref, end_symbol);
 
   for (int i = 0; i < sz_arr; ++i) {
     // retrieve measurements
