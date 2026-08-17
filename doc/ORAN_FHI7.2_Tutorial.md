@@ -306,6 +306,10 @@ timedatectl set-ntp false
 
 ### DPDK (Data Plane Development Kit)
 
+> [!NOTE]
+> DPDK version 20.11 or superior is required  
+> We recommend using DPDK 22.11.11 while possible
+
 Download DPDK version 22.11.11 (K release).
 
 ```bash
@@ -406,7 +410,7 @@ cd ~/openairinterface5g/
 ```bash
 git clone https://github.com/openairinterface/o-du-phy.git ~/phy
 cd ~/phy
-git checkout 11.1.5 # the tag points to the `main` branch which has all patches applied that are relevant for OAI integration; the tag matches the value of cmake variable `K_VERSION`
+git checkout 11.1.6 # the tag points to the `main` branch which has all patches applied that are relevant for OAI integration; the tag matches the value of cmake variable `K_VERSION`
 ```
 or use `xran_DOWNLOAD` option when compiling OAI gNB.
 
@@ -1540,10 +1544,7 @@ Edit the sample OAI gNB configuration file and check following parameters:
 
 * `RUs` section
   * Set an isolated core for RU thread `ru_thread_core`, in our environment we are using CPU 6
-  * If testing with a numerology different than 1 (e.g., FDD with numerology 0),
-    set `nr_scs_for_raster` to the used numerology, and adapt `sl_ahead`: it must be
-    strictly less than the number of slots in a frame (e.g., 5 for numerology 0).
-  
+
 * `fhi_72` (FrontHaul Interface) section: this config follows the structure
   that is employed by the xRAN library (`xran_fh_init` and `xran_fh_config`
   structs in the code):

@@ -765,6 +765,24 @@ static bool get_cw_info(NR_UE_DL_HARQ_STATUS_t *current_harq,
   return true;
 }
 
+/* Counterpart of the UL accumulation in nr_ue_dl_scheduler(), so that the DL line of
+ * print_ue_mac_stats() can report the same averages. Weighted by TBS like the UL side, and
+ * accumulated on every grant including retransmissions so the per-TB averages divide by the
+ * same round total the print uses. */
+static void accumulate_dl_stats(NR_UE_MAC_INST_t *mac,
+                                const fapi_nr_dl_config_dlsch_pdu_rel15_t *dlsch_pdu,
+                                const fapi_nr_dl_cw_info_t *cw_info,
+                                int number_rbs)
+{
+  int bits = cw_info->TBS;
+  mac->stats.dl.total_bits += bits;
+  mac->stats.dl.target_code_rate += (uint64_t)cw_info->targetCodeRate * bits;
+  if (cw_info->qamModOrder)
+    mac->stats.dl.total_symbols += bits / cw_info->qamModOrder;
+  mac->stats.dl.rb_size += number_rbs;
+  mac->stats.dl.nr_of_symbols += dlsch_pdu->number_symbols;
+}
+
 static int nr_ue_process_dci_dl_10_p_rnti(NR_UE_MAC_INST_t *mac,
                                           frame_t frame,
                                           int slot,
@@ -1475,6 +1493,7 @@ static int nr_ue_process_dci_dl_11(NR_UE_MAC_INST_t *mac,
                     cw_idx)) {
       if (current_harq->round < sizeofArray(mac->stats.dl.rounds))
         mac->stats.dl.rounds[current_harq->round]++;
+      accumulate_dl_stats(mac, dlsch_pdu, &dlsch_pdu->cw_info[0], number_rbs);
       // set the harq status at MAC for feedback
       set_harq_status(mac,
                       dci->pucch_resource_indicator,
@@ -1507,6 +1526,7 @@ static int nr_ue_process_dci_dl_11(NR_UE_MAC_INST_t *mac,
                     cw_idx)) {
       if (current_harq->round < sizeofArray(mac->stats.dl.rounds))
         mac->stats.dl.rounds[current_harq->round]++;
+      accumulate_dl_stats(mac, dlsch_pdu, &dlsch_pdu->cw_info[1], number_rbs);
       // set the harq status at MAC for feedback
       set_harq_status(mac,
                       dci->pucch_resource_indicator,
@@ -2667,8 +2687,7 @@ int nr_get_csi_measurements(NR_UE_MAC_INST_t *mac,
                             frame_t frame,
                             int slot,
                             nfapi_nr_ue_csi_payload_t *csi_payload,
-                            NR_PUCCH_Resource_t **csi_pucch,
-                            bool csi_on_pusch)
+                            NR_PUCCH_Resource_t **csi_pucch)
 {
   NR_UE_UL_BWP_t *current_UL_BWP = mac->current_UL_BWP;
   NR_PUCCH_Config_t *pucch_Config = current_UL_BWP ? current_UL_BWP->pucch_Config : NULL;
@@ -2722,13 +2741,17 @@ int nr_get_csi_measurements(NR_UE_MAC_INST_t *mac,
         // we discard previous report
         csi_priority = temp_priority;
         num_csi = 1;
-        *csi_payload = nr_get_csi_payload(mac, csi_report_id, csi_on_pusch ? ON_PUSCH : WIDEBAND_ON_PUCCH, csi_measconfig);
+        // 38.214 section 5.2.3: "For both Type I and Type II reports configured for PUCCH but transmitted
+        // on PUSCH, the determination of the payload for CSI part 1 and CSI part 2 follows that of PUCCH
+        // as described in Clause 5.2.4." Hence WIDEBAND_ON_PUCCH is used here regardless of whether
+        // the CSI report is sent on PUCCH or PUSCH.
+        *csi_payload = nr_get_csi_payload(mac, csi_report_id, WIDEBAND_ON_PUCCH, csi_measconfig);
       } else
         continue;
     } else {
       num_csi = 1;
       csi_priority = temp_priority;
-      *csi_payload = nr_get_csi_payload(mac, csi_report_id, csi_on_pusch ? ON_PUSCH : WIDEBAND_ON_PUCCH, csi_measconfig);
+      *csi_payload = nr_get_csi_payload(mac, csi_report_id, WIDEBAND_ON_PUCCH, csi_measconfig);
     }
   }
   return num_csi;
@@ -3769,6 +3792,9 @@ static nr_dci_format_t nr_extract_dci_00_10(NR_UE_MAC_INST_t *mac,
       // sys info = 0 for SIB1 and 1 for other SIB
       if (mac->get_sib1 == 0 && sys_info == 0)
         return NR_DCI_NONE;
+      // received DCI for other SI while still waiting to receive SIB1
+      if (mac->get_sib1 != 0 && sys_info == 1)
+        return NR_DCI_NONE;
       break;
     case TYPE_C_RNTI_ :
       // Identifier for DCI formats
@@ -4018,7 +4044,7 @@ static void nr_ue_process_mac_pdu(NR_UE_MAC_INST_t *mac, nr_downlink_indication_
 {
   frame_t frameP = dl_info->frame;
   int slot = dl_info->slot;
-  fapi_nr_pdsch_pdu_t *pdsch_pdu = &(dl_info->rx_ind->rx_indication_body + pdu_id)->pdsch_pdu;
+  fapi_nr_pdsch_pdu_t *pdsch_pdu = &dl_info->rx_ind->rx_indication_body[pdu_id].pdsch_pdu;
   uint8_t *pduP = pdsch_pdu->pdu;
   int32_t pdu_len = (int32_t)pdsch_pdu->pdu_length;
   uint8_t CC_id = dl_info->cc_id;

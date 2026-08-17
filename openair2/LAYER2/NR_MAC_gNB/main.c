@@ -137,23 +137,6 @@ void *nrmac_stats_thread(void *arg) {
   return NULL;
 }
 
-void clear_mac_stats(gNB_MAC_INST *gNB) {
-  // limpa as stats MAC
-  UE_iterator(gNB->UE_info.connected_ue_list, UE) {
-    memset(&UE->mac_stats,0,sizeof(UE->mac_stats));
-  }
-}
-
-static bool has_established_pdu_session(const gNB_RRC_UE_t *ue_context)
-{
-  // usa o rrc para verificar se existe pdu establecida para este UE
-  FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t *, pdu, &ue_context->pduSessions) {
-    if (pdu->status == PDU_SESSION_STATUS_ESTABLISHED)
-      return true;
-  }
-  return false;
-}
-
 static char *st_append(char *start, const char *end, const char *format, ...)
 {
   size_t space = end - start;
@@ -202,10 +185,8 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
   UE_iterator(gNB->UE_info.connected_ue_list, UE) {
     NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
     NR_mac_stats_t *stats = &UE->mac_stats;
-    const gNB_RRC_INST *rrc = RC.nrrrc ? RC.nrrrc[gNB->Mod_id] : NULL;
-    const rrc_gNB_ue_context_t *rrc_ue_context = rrc ? rrc_gNB_get_ue_context_by_rnti_any_du((gNB_RRC_INST *)rrc, UE->rnti) : NULL;
-    const int avg_rsrp = stats->num_rsrp_meas > 0 ? stats->cumul_rsrp / stats->num_rsrp_meas : 0;
-    const int avg_sinrx10 = stats->num_sinr_meas > 0 ? stats->cumul_sinrx10 / stats->num_sinr_meas : 0;
+    const int avg_rsrp = stats->num_rsrp_meas > 0 ? stats->cumul_rsrp / (int)stats->num_rsrp_meas : 0;
+    const int avg_sinrx10 = stats->num_sinr_meas > 0 ? stats->cumul_sinrx10 / (int)stats->num_sinr_meas : 0;
 
     // junta toda a info RRC e F1 disponivel 
     output = st_append(output, end, "UE RNTI %04x CU-UE-ID ", UE->rnti);
@@ -244,12 +225,12 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                        sched_ctrl->pcmax);
 
     if (stats->num_rsrp_meas)
-      output = st_append(output, end, ", average RSRP %d (%d meas)", avg_rsrp, stats->num_rsrp_meas);
+      output = st_append(output, end, ", average RSRP %d (%u meas)", avg_rsrp, stats->num_rsrp_meas);
 
     if (stats->num_sinr_meas) {
       output = st_append(output,
                          end,
-                         ", average SINR %d.%d (%d meas)",
+                         ", average SINR %d.%d (%u meas)",
                          avg_sinrx10 / 10,
                          avg_sinrx10 % 10,
                          stats->num_sinr_meas);
@@ -257,18 +238,16 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
 
     output = st_append(output, end, "\n");
 
-    if(sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.print_report)
-      output = st_append(output,
-                         end,
-                         "UE %04x: CQI %d, RI %d, PMI (%d,%d)\n",
-                         UE->rnti,
-                         sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.wb_cqi_1tb,
-                         sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.ri+1,
-                         sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.pmi_x1,
-                         sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.pmi_x2);
-
-    if (stats->srs_stats[0] != '\0') {
-      output = st_append(output, end, "UE %04x: %s\n", UE->rnti, stats->srs_stats);
+    bool csirep = sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.print_report;
+    bool srsrep = stats->srs_stats[0] != '\0';
+    if(csirep || srsrep) {
+      output = st_append(output, end, "UE %04x:", UE->rnti);
+      const struct CRI_RI_LI_PMI_CQI *r = &sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report;
+      if (csirep)
+        output = st_append(output, end, " CSI [CQI %d RI %d PMI (%d,%d)]", r->wb_cqi_1tb, r->ri + 1, r->pmi_x1, r->pmi_x2);
+      if (srsrep)
+        output = st_append(output, end, " SRS [%s]", stats->srs_stats);
+      output = st_append(output, end, "\n");
     }
 
     output = st_append(output,
@@ -280,19 +259,21 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
 
     float pucch_snr = nr_mac_get_snr(&sched_ctrl->pucch_pc);
     float pucch_snr_diff = (pucch_snr * 10.0f - sched_ctrl->pucch_pc.target_snrx10) / 10.0f;
+    float pucch_rssi = nr_mac_get_rssi(&sched_ctrl->pucch_pc);
     output = st_append(output,
                        end,
                        ", dlsch_errors %" PRIu64
-                       ", pucch0_DTX %d (SNR %.1f%+.1f dB), BLER %.5f MCS (%d) %d CCE fail %d, goodput %.2f Mbps\n",
+                       ", pucch0_DTX %d (SNR %.1f%+.1f) RSSI %.1f, BLER %.5f MCS (%d) %d (Qm %d) CCE fail %d\n",
                        stats->dl.errors,
                        stats->pucch0_DTX,
                        pucch_snr,
                        pucch_snr_diff,
+                       pucch_rssi,
                        sched_ctrl->dl_bler_stats.bler,
                        UE->current_DL_BWP.mcsTableIdx,
                        sched_ctrl->dl_bler_stats.mcs,
-                       sched_ctrl->dl_cce_fail,
-                       UE->dl_thr_ue_display / 1e6);
+                       nr_get_Qm_dl(sched_ctrl->dl_bler_stats.mcs, UE->current_DL_BWP.mcsTableIdx),
+                       sched_ctrl->dl_cce_fail);
     if (reset_rsrp) {
       stats->num_rsrp_meas = 0;
       stats->cumul_rsrp = 0;
@@ -307,12 +288,13 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
       output = st_append(output, end, "/%"PRIu64, stats->ul.rounds[i]);
 
     float snr = nr_mac_get_snr(&sched_ctrl->pusch_pc);
+    float rssi = nr_mac_get_rssi(&sched_ctrl->pusch_pc);
     float diff_target = (snr * 10.0f - sched_ctrl->pusch_pc.target_snrx10) / 10.0f;
     output = st_append(
         output,
         end,
         ", ulsch_errors %" PRIu64
-        ", ulsch_DTX %d, BLER %.5f MCS (%d) %d (Qm %d deltaMCS %d dB) NPRB %d SNR %.1f (%+.1f) dB CCE fail %d, goodput %.2f Mbps\n",
+        ", ulsch_DTX %d, BLER %.5f MCS (%d) %d (Qm %d deltaMCS %d) NPRB %d SNR %.1f (%+.1f) RSSI %.1f CCE fail %d\n",
         stats->ul.errors,
         stats->ulsch_DTX,
         sched_ctrl->ul_bler_stats.bler,
@@ -323,19 +305,18 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
         UE->mac_stats.NPRB,
         snr,
         diff_target,
-        sched_ctrl->ul_cce_fail,
-        UE->ul_thr_ue_display / 1e6);
+        rssi,
+        sched_ctrl->ul_cce_fail);
 
+    // normally a UE should have at least one LCID, 1 in SA or 4 in NSA/phy-test
+    output = st_append(output, end, "UE %04x: LCID ", UE->rnti);
     for (int i = 0; i < seq_arr_size(&sched_ctrl->lc_config); i++) {
       const nr_lc_config_t *c = seq_arr_at(&sched_ctrl->lc_config, i);
-      output = st_append(output,
-                         end,
-                         "UE %04x: LCID %d: TX %14"PRIu64" RX %14"PRIu64" bytes\n",
-                         UE->rnti,
-                         c->lcid,
-                         stats->dl.lc_bytes[c->lcid],
-                         stats->ul.lc_bytes[c->lcid]);
+      output = st_append(output, end, "%d,", c->lcid);
     }
+    float dl_thr = UE->dl_thr_ue_display / 1e6;
+    float ul_thr = UE->ul_thr_ue_display / 1e6;
+    output = st_append(output, end, " goodput DL %7.2f UL %7.2f Mbps\n",  dl_thr, ul_thr);
   }
   DevAssert(output <= end);
   return output - begin;
@@ -449,11 +430,9 @@ void mac_top_init_gNB(ngran_node_t node_type,
     RC.nrmac = NULL;
   }
 
-  // linked list para UEs ativos
   for (module_id_t i = 0; i < RC.nb_nr_macrlc_inst; i++) {
     gNB_MAC_INST *nrmac = RC.nrmac[i];
     nrmac->if_inst = NR_IF_Module_init(i);
-    memset(&nrmac->UE_info, 0, sizeof(nrmac->UE_info));
   }
 
   du_init_f1_ue_data();

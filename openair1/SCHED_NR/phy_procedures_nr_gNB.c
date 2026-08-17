@@ -277,7 +277,8 @@ void phy_procedures_gNB_TX(PHY_VARS_gNB *gNB,
           // reuse dlsch variables, as there are multiple very large memory
           // buffers
           gNB->dlsch[num_pdsch].pdsch_pdu = &dl_tti_pdu->pdsch_pdu;
-          gNB->dlsch[num_pdsch].pdu = (uint8_t *)TX_req->pdu_list[tx_data_idx].TLVs[0].value.direct;
+          const nfapi_nr_tx_data_request_tlv_t *tlv = &TX_req->pdu_list[tx_data_idx].TLVs[0];
+          gNB->dlsch[num_pdsch].pdu = tlv->tag == 0 ? (uint8_t *)tlv->value.direct : (uint8_t *)tlv->value.ptr;
           DevAssert(num_pdsch < gNB->max_nb_pdsch);
           num_pdsch++;
         } else {
@@ -429,37 +430,42 @@ static void nr_fill_indication(const PHY_VARS_gNB *gNB,
 {
   // Get estimated timing advance for MAC
   const int sync_pos = pusch->delay.est_delay;
+  int timing_advance_update = 0xffff;
 
   // scale the 16 factor in N_TA calculation in 38.213 section 4.2 according to the used FFT size
   uint16_t bw_scaling = 16 * gNB->frame_parms.ofdm_symbol_size / 2048;
 
-  // do some integer rounding to improve TA accuracy
-  int sync_pos_rounded;
-  if (sync_pos > 0)
-    sync_pos_rounded = sync_pos + (bw_scaling / 2) - 1;
-  else
-    sync_pos_rounded = sync_pos - (bw_scaling / 2) + 1;
   if (stats)
     stats->ulsch_stats.sync_pos = sync_pos;
 
-  int timing_advance_update = sync_pos_rounded / bw_scaling;
+  if (pusch->delay.valid) {
+    // do some integer rounding to improve TA accuracy
+    int sync_pos_rounded;
+    if (sync_pos > 0)
+      sync_pos_rounded = sync_pos + (bw_scaling / 2) - 1;
+    else
+      sync_pos_rounded = sync_pos - (bw_scaling / 2) + 1;
 
-  // put timing advance command in 0..63 range
-  timing_advance_update += 31;
-  timing_advance_update = max(timing_advance_update, 0);
-  timing_advance_update = min(timing_advance_update, 63);
+    timing_advance_update = sync_pos_rounded / bw_scaling;
+
+    // put timing advance command in 0..63 range
+    timing_advance_update += 31;
+    timing_advance_update = max(timing_advance_update, 0);
+    timing_advance_update = min(timing_advance_update, 63);
+  }
 
   // estimate UL_CQI for MAC
   int SNRtimes10 = dB_fixed_x10(pusch->ulsch_power_tot) - dB_fixed_x10(pusch->ulsch_noise_power_tot);
 
   LOG_D(PHY,
-        "%d.%d: Estimated SNR for PUSCH is = %f dB (ulsch_power %f, noise %f) delay %d\n",
+        "%d.%d: Estimated SNR for PUSCH is = %f dB (ulsch_power %f, noise %f) delay %d%s\n",
         frame,
         slot_rx,
         SNRtimes10 / 10.0,
         dB_fixed_x10(pusch->ulsch_power_tot) / 10.0,
         dB_fixed_x10(pusch->ulsch_noise_power_tot) / 10.0,
-        sync_pos);
+        sync_pos,
+        pusch->delay.valid ? "" : " (invalid)");
 
   int cqi;
   if      (SNRtimes10 < -640) cqi=0;
@@ -474,7 +480,9 @@ static void nr_fill_indication(const PHY_VARS_gNB *gNB,
   crc->ul_cqi = cqi;
   crc->timing_advance = timing_advance_update;
   // in terms of dBFS range -128 to 0 with 0.1 step
-  crc->rssi = (dtx_flag == 0) ? 1280 - (10 * dB_fixed(32767 * 32767) - dB_fixed_times10(pusch->ulsch_power[0])) : 0;
+  int n_rx = pusch_pdu->param_v4.numSpatialStreamIndices;
+  uint16_t rssi = 1280 - (10 * dB_fixed(32767 * 32767) - dB_fixed_times10(pusch->ulsch_power_tot / n_rx));
+  crc->rssi = (dtx_flag == 0) ? rssi : 0;
 
   pdu->handle = pusch_pdu->handle;
   pdu->rnti = pusch_pdu->rnti;
@@ -825,7 +833,11 @@ nr_srs_info_t nr_srs_rx_procedures(PHY_VARS_gNB *gNB,
   return nr_srs_info;
 }
 
-static void handle_srs(fsn_t now, PHY_VARS_gNB *gNB, const NR_gNB_SRS_job_t *srs, nfapi_nr_srs_indication_pdu_t *srs_indication)
+static void handle_srs(fsn_t now,
+                       PHY_VARS_gNB *gNB,
+                       const NR_gNB_SRS_job_t *srs,
+                       nfapi_nr_srs_indication_pdu_t *srs_indication,
+                       nfapi_nr_srs_toa_vendor_ext_indication_t *srs_toa_v_ext)
 {
   const NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
   const nfapi_nr_srs_pdu_t *srs_pdu = &srs->srs_pdu;
@@ -882,6 +894,9 @@ static void handle_srs(fsn_t now, PHY_VARS_gNB *gNB, const NR_gNB_SRS_job_t *srs
     case 1 << NFAPI_NR_SRS_ANTENNASWITCH:
       srs_indication->srs_usage = NFAPI_NR_SRS_ANTENNASWITCH;
       break;
+    case 1 << NFAPI_NR_SRS_POSITIONING:
+      srs_indication->srs_usage = NFAPI_NR_SRS_POSITIONING;
+      break;
     default:
       LOG_E(NR_PHY, "Invalid srs_pdu->srs_parameters_v4.usage %i\n", srs_pdu->srs_parameters_v4.usage);
   }
@@ -929,6 +944,18 @@ static void handle_srs(fsn_t now, PHY_VARS_gNB *gNB, const NR_gNB_SRS_job_t *srs
     case NFAPI_NR_SRS_ANTENNASWITCH:
       LOG_W(NR_PHY, "PHY procedures for this SRS usage are not implemented yet!\n");
       break;
+
+    case NFAPI_NR_SRS_POSITIONING: {
+      nfapi_nr_srs_toa_vendor_ext_indication_t *srs_toa_vendor_ext_ind = srs_toa_v_ext;
+      srs_toa_vendor_ext_ind->sfn = now.f;
+      srs_toa_vendor_ext_ind->slot = now.s;
+      srs_toa_vendor_ext_ind->rnti = srs_pdu->rnti;
+      srs_toa_vendor_ext_ind->num_ta = nb_antennas_rx;
+      for (int ta_idx = 0; ta_idx < nb_antennas_rx; ta_idx++) {
+        srs_toa_vendor_ext_ind->ta_offset_nsec[ta_idx] = timing_advance_offset_nsec[ta_idx];
+      }
+      break;
+    }
 
     default:
       AssertFatal(1 == 0, "Invalid SRS usage\n");
@@ -1040,7 +1067,7 @@ static bool pusch_signal_detected(PHY_VARS_gNB *gNB, NR_gNB_PUSCH *pusch_vars, N
       stats->ulsch_stats.DTX++;
   }
 
-  return true;
+  return detected;
 }
 
 static bool drop_old_pucch(const void *data, void *user)
@@ -1286,7 +1313,7 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, N
   UL_INFO->srs_ind.number_of_pdus = n_srs;
   for (int i = 0; i < n_srs; ++i) {
     start_meas(&gNB->rx_srs_stats);
-    handle_srs(now, gNB, &srs[i], &UL_INFO->srs_ind.pdu_list[i]);
+    handle_srs(now, gNB, &srs[i], &UL_INFO->srs_ind.pdu_list[i], &UL_INFO->srs_toa_vendor_ext_ind);
     stop_meas(&gNB->rx_srs_stats);
   }
 

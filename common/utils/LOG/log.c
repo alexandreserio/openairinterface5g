@@ -134,7 +134,7 @@ int write_file_matlab(const char *fname,
   FILE *fp=NULL;
   int i;
 
-  AssertFatal((format&~MATLAB_RAW) <16,"");
+  AssertFatal((format & ~MATLAB_RAW) < 16, "no possible format 0x%x", format);
 
   if (data == NULL)
     return -1;
@@ -507,8 +507,8 @@ int logInit (void)
     memset(&(g_log->log_component[i]),0,sizeof(log_component_t));
   }
 
-  AssertFatal(__builtin_popcount(g_log->flag & (FLAG_TIME | FLAG_REAL_TIME | FLAG_UTC_TIME)) <= 1,
-          "Invalid log options: time, wall_clock and utc_time are mutually exclusive\n");
+  int ret = __builtin_popcount(g_log->flag & (FLAG_TIME | FLAG_REAL_TIME | FLAG_UTC_TIME));
+  AssertFatal(ret <= 1, "Invalid log options: time, wall_clock and utc_time are mutually exclusive\n");
 
   g_log->flag =  g_log->flag | FLAG_INITIALIZED;
   return 0;

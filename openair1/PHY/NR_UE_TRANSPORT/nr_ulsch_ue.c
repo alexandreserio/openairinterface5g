@@ -826,12 +826,14 @@ static void map_uci_common(struct map_uci_common_arg p)
         }
         total_placed++;
       }
-      if (p.uci_type_to_map == BIT_TYPE_CSI1 && p.resv_ack_pos_symb) {
+      if (p.uci_type_to_map != BIT_TYPE_ACK_RESERVED)
+        p.m_uci_current[sym]--;
+      if (p.uci_type_to_map == BIT_TYPE_CSI1 || p.uci_type_to_map == BIT_TYPE_CSI2) {
         uint32_t prev_re_offset = re_offset;
         re_offset += d_factor_re;
-        for (uint32_t i = 0; i < p.resv_ack_count_symb[sym] / p.nlqm; i++) {
-          uint32_t resv_re = (p.resv_ack_pos_symb[sym][i * p.nlqm] - symbol_start_bit_idx[sym]) / p.nlqm;
-          if (resv_re > prev_re_offset && resv_re <= re_offset)
+        for (uint32_t re = prev_re_offset + 1; re <= re_offset && re < uci_re_on_sym; re++) {
+          uci_on_pusch_bit_type_t t = p.template[symbol_start_bit_idx[sym] + (re * p.nlqm)];
+          if (skip_mapping_current_uci(t, p.uci_type_to_map))
             re_offset++;
         }
       } else {
@@ -866,6 +868,7 @@ static void map_overlapped_ack(uci_on_pusch_bit_type_t *template,
 {
   const int placeholder_start = (pusch_pdu->pusch_uci.harq_ack_bit_length == 1) ? 1 : 2;
   const int Qm = pusch_pdu->qam_mod_order;
+  const int nlqm = Qm * pusch_pdu->nrOfLayers;
   uint32_t ack_bits_marked = 0;
   for (uint8_t sym_iter = l1_c; sym_iter < pusch_pdu->nr_of_symbols; sym_iter++) {
     const uint32_t num_reserved_bits_on_sym = count_by_sym[sym_iter];
@@ -882,16 +885,16 @@ static void map_overlapped_ack(uci_on_pusch_bit_type_t *template,
     const int32_t num_ack_remaining = G_ack - ack_bits_marked;
     if (num_ack_remaining <= 0)
       continue;
-    AssertFatal(num_reserved_bits_on_sym % Qm == 0,
-                "reserved bits on symbol (%u) not a multiple of Qm (%d)\n",
+    AssertFatal(num_reserved_bits_on_sym % nlqm == 0,
+                "reserved bits on symbol (%u) not a multiple of nlqm (%d)\n",
                 num_reserved_bits_on_sym,
-                Qm);
-    const uint32_t num_reserved_re = num_reserved_bits_on_sym / Qm;
-    const uint32_t num_ack_re_remaining = num_ack_remaining / Qm;
+                nlqm);
+    const uint32_t num_reserved_re = num_reserved_bits_on_sym / nlqm;
+    const uint32_t num_ack_re_remaining = num_ack_remaining / nlqm;
     const uint32_t d_factor_re = get_d_factor_re(num_ack_re_remaining, num_reserved_re);
     for (uint32_t re = 0; re < num_reserved_re && ack_bits_marked < G_ack; re += d_factor_re) {
-      for (int b = 0; b < Qm; b++) {
-        uint32_t pos = reserved_indices_on_this_sym[re * Qm + b];
+      for (int b = 0; b < nlqm; b++) {
+        uint32_t pos = reserved_indices_on_this_sym[re * nlqm + b];
         int bit_in_group = pos % Qm;
         if (template[pos] == BIT_TYPE_ULSCH) // puncturing ULSCH
           template[pos] = (bit_in_group >= placeholder_start) ? BIT_TYPE_ACK_PLACEHOLDER : BIT_TYPE_ACK_RESERVED;

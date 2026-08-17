@@ -8,6 +8,7 @@
 
 #include "common/platform_constants.h"
 #include "nr_phy_common.h"
+#include "nr_layer_demapping.h"
 #include "PHY/defs_nr_UE.h"
 #include "nr_transport_proto_ue.h"
 #include "PHY/sse_intrin.h"
@@ -304,7 +305,7 @@ static void nr_determin(int size,
                         int32_t sign,
                         int32_t shift0)
 {
-  AssertFatal(size > 0, "");
+  AssertFatal(size > 0, "impossible null size in nr_determin");
 
   if(size==1) {
     nr_element_sign(a44[0][0], // a

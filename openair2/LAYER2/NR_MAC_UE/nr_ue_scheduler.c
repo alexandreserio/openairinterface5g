@@ -1342,6 +1342,8 @@ void nr_ue_dl_scheduler(NR_UE_MAC_INST_t *mac, nr_downlink_indication_t *dl_info
 
 static bool check_pucchres_for_pending_SR(NR_PUCCH_Config_t *pucch_Config, int target_sr_id)
 {
+  if (!pucch_Config || !pucch_Config->schedulingRequestResourceToAddModList)
+    return false;
   for (int id = 0; id < pucch_Config->schedulingRequestResourceToAddModList->list.count; id++) {
     NR_SchedulingRequestResourceConfig_t *sr_Config = pucch_Config->schedulingRequestResourceToAddModList->list.array[id];
     if (sr_Config->schedulingRequestID == target_sr_id)  {
@@ -1419,10 +1421,6 @@ static void nr_update_sr(NR_UE_MAC_INST_t *mac, bool BSRsent)
 
   NR_UE_UL_BWP_t *current_UL_BWP = mac->current_UL_BWP;
   NR_PUCCH_Config_t *pucch_Config = current_UL_BWP ? current_UL_BWP->pucch_Config : NULL;
-  if (!pucch_Config
-      || !pucch_Config->schedulingRequestResourceToAddModList
-      || pucch_Config->schedulingRequestResourceToAddModList->list.count == 0)
-    return; // cannot schedule SR if there is no schedulingRequestResource configured
 
   if (lc_info->sr_id < 0 || lc_info->sr_id >= NR_MAX_SR_ID)
     LOG_E(NR_MAC, "No SR corresponding to this LCID\n"); // TODO not sure what to do here
@@ -1432,14 +1430,17 @@ static void nr_update_sr(NR_UE_MAC_INST_t *mac, bool BSRsent)
       if (check_pucchres_for_pending_SR(pucch_Config, lc_info->sr_id)) {
         // trigger SR
         LOG_D(NR_MAC, "Triggering SR for ID %d\n", lc_info->sr_id);
+        mac->sr_fallback_ra_triggered = false;
         sr->pending = true;
         sr->counter = 0;
-      } else {
+      } else if (!mac->sr_fallback_ra_triggered && !mac->ra.ra_pucch) {
         // initiate a Random Access procedure on the SpCell and cancel the pending SR
         // if the MAC entity has no valid PUCCH resource configured for the pending SR
+        // Wait until any pending Msg4/MsgB HARQ feedback PUCCH has been transmitted
         sr->pending = false;
         sr->counter = 0;
         nr_timer_stop(&sr->prohibitTimer);
+        mac->sr_fallback_ra_triggered = true;
         schedule_RA_after_SR_failure(mac);
       }
     }
@@ -1762,11 +1763,13 @@ static bool schedule_uci_on_pusch(NR_UE_MAC_INST_t *mac,
     return false;
   }
 
+  // Section 9 of 38.213 states:
   // - UE multiplexes only HARQ-ACK information, if any, from the UCI in the PUSCH transmission
   // and does not transmit the PUCCH if the UE multiplexes aperiodic or semi-persistent CSI reports in the PUSCH
-
   // - UE multiplexes only HARQ-ACK information and CSI reports, if any, from the UCI in the PUSCH transmission
   // and does not transmit the PUCCH if the UE does not multiplex aperiodic or semi-persistent CSI reports in the PUSCH
+
+  // HARQ is then multiplexed on PUSCH in both scenarios
   bool mux_done = false;
   if (pucch->n_harq > 0) {
     NR_PUSCH_Config_t *pusch_Config = mac->current_UL_BWP->pusch_Config;
@@ -1790,14 +1793,13 @@ static bool schedule_uci_on_pusch(NR_UE_MAC_INST_t *mac,
     }
   }
 
-  AssertFatal(pusch_pdu->pusch_uci.csi_payload.p1_bits == 0, "PUSCH already has CSI report\n");
-
-  // Check if this PUCCH has CSI report to send. If so, multiplex it on PUSCH
-  if (pucch->csi_payload.p1_bits > 0) {
+  // CSI, if present on PUCCH, is transmitted only if there is no aperiodic/semi-persistent CSI report already
+  bool csi_present = (pusch_pdu->pusch_uci.csi_payload.p1_bits > 0) || (pusch_pdu->pusch_uci.csi_payload.p2_bits > 0);
+  if (pucch->csi_payload.p1_bits > 0 && !csi_present) {
     nfapi_nr_ue_csi_payload_t csi_payload = {0};
     NR_PUSCH_Config_t *pusch_Config = mac->current_UL_BWP->pusch_Config;
     NR_PUCCH_Resource_t *csi_pucch = NULL;
-    nr_get_csi_measurements(mac, frame_tx, slot_tx, &csi_payload, &csi_pucch, true);
+    nr_get_csi_measurements(mac, frame_tx, slot_tx, &csi_payload, &csi_pucch);
     fill_pusch_uci_struct(pusch_Config, &csi_payload, pusch_pdu);
     mux_done = true;
   }
@@ -1837,7 +1839,7 @@ static void nr_ue_pucch_scheduler(NR_UE_MAC_INST_t *mac, frame_t frame, int slot
   // CSI
   int csi_res = 0;
   if (mac->state == UE_CONNECTED)
-    csi_res = nr_get_csi_measurements(mac, frame, slot, &pucch[num_res].csi_payload, &pucch[num_res].pucch_resource, false);
+    csi_res = nr_get_csi_measurements(mac, frame, slot, &pucch[num_res].csi_payload, &pucch[num_res].pucch_resource);
   if (csi_res > 0) {
     num_res += csi_res;
   }

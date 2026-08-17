@@ -25,8 +25,6 @@
 //#define NR_CSIRS_DEBUG
 //#define NR_CSIIM_DEBUG
 
-extern openair0_config_t openair0_cfg[MAX_CARDS];
-
 void nr_det_A_MF_2x2(int32_t *a_mf_00,
                      int32_t *a_mf_01,
                      int32_t *a_mf_10,
@@ -222,7 +220,7 @@ static int nr_get_csi_rs_signal(const PHY_VARS_NR_UE *ue,
 
   *rsrp = rsrp_sum/meas_count;
   *rsrp_dBm = dB_fixed(*rsrp) + 30 - SQ15_SQUARED_NORM_FACTOR_DB
-              - ((int)openair0_cfg[ue->rf_map.card].rx_gain[0] - (int)openair0_cfg[ue->rf_map.card].rx_gain_offset[0])
+              - ((int)openair0_cfg_g[ue->rf_map.card].rx_gain[0] - (int)openair0_cfg_g[ue->rf_map.card].rx_gain_offset[0])
               - dB_fixed(ue->frame_parms.ofdm_symbol_size);
 
 #ifdef NR_CSIRS_DEBUG
@@ -1009,21 +1007,17 @@ void nr_ue_csi_rs_procedures(PHY_VARS_NR_UE *ue,
   switch (csirs_config_pdu->measurement_bitmap) {
     case 0:
       if (do_trs_est)
-        LOG_I(NR_PHY,
-              "%d.%d TRS estimated CFO: %d Hz\n",
-              proc->frame_rx,
-              proc->nr_slot_rx,
-              trs_cfo);
+        LOG_D(NR_PHY, "%d.%d TRS estimated CFO: %d Hz\n", proc->frame_rx, proc->nr_slot_rx, trs_cfo);
       break;
     case 1:
-      LOG_I(NR_PHY, "%d.%d [UE %d] RSRP = %i dBm\n", proc->frame_rx, proc->nr_slot_rx, ue->Mod_id, rsrp_dBm);
+      LOG_D(NR_PHY, "%d.%d [UE %d] RSRP = %i dBm\n", proc->frame_rx, proc->nr_slot_rx, ue->Mod_id, rsrp_dBm);
       break;
     case 26 :
-      LOG_I(NR_PHY, "RI = %i i1 = %i.%i.%i, i2 = %i, SINR = %i dB, CQI = %i\n",
+      LOG_D(NR_PHY, "RI = %i i1 = %i.%i.%i, i2 = %i, SINR = %i dB, CQI = %i\n",
             rank_indicator + 1, i1[0], i1[1], i1[2], i2[0], precoded_sinr_dB, cqi);
       break;
     case 27 :
-      LOG_I(NR_PHY, "RSRP = %i dBm, RI = %i i1 = %i.%i.%i, i2 = %i, SINR = %i dB, CQI = %i\n",
+      LOG_D(NR_PHY, "RSRP = %i dBm, RI = %i i1 = %i.%i.%i, i2 = %i, SINR = %i dB, CQI = %i\n",
             rsrp_dBm, rank_indicator + 1, i1[0], i1[1], i1[2], i2[0], precoded_sinr_dB, cqi);
       break;
     default :

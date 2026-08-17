@@ -36,7 +36,7 @@ void mac_top_init_gNB(ngran_node_t node_type,
                       const nr_rlc_configuration_t *default_rlc_config);
 void mac_top_destroy_gNB(gNB_MAC_INST *mac);
 void nr_mac_send_f1_setup_req(void);
-int get_ssbidx_from_beam(gNB_MAC_INST *mac, int beam_idx);
+int get_ssbidx_from_beam(const gNB_MAC_INST *mac, int beam_idx);
 void nr_mac_config_scc(gNB_MAC_INST *nrmac, NR_ServingCellConfigCommon_t *scc, const nr_mac_config_t *mac_config);
 void nr_mac_configure_sib1(gNB_MAC_INST *nrmac, const plmn_id_t *plmn, uint64_t cellID, int tac);
 bool nr_mac_configure_other_sib(gNB_MAC_INST *nrmac, int num_cu_sib, const f1ap_sib_msg_t cu_sib[num_cu_sib]);
@@ -183,7 +183,7 @@ void nr_srs_ri_computation(const nfapi_nr_srs_normalized_channel_iq_matrix_t *nr
 int get_pucch_resourceid(NR_PUCCH_Config_t *pucch_Config, int O_uci, int pucch_resource);
 
 void nr_schedule_periodic_srs(int module_id, frame_t frame, int slot);
-void nr_schedule_aperiodic_srs(gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int sched_frame, int sched_slot, int k2, int sched_srs);
+bool nr_schedule_aperiodic_srs(gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int sched_frame, int sched_slot, int k2, int sched_srs);
 void nr_csirs_scheduling(int Mod_idP, frame_t frame, slot_t slot, nfapi_nr_dl_tti_request_t *DL_req);
 
 void nr_csi_meas_reporting(int Mod_idP, frame_t frameP, slot_t slotP);
@@ -215,7 +215,9 @@ void nr_configure_pucch(nfapi_nr_pucch_pdu_t *pucch_pdu,
                         uint8_t O_sr,
                         int r_pucch,
                         nr_beam_mode_t mode,
-                        uint16_t ant_port_idx);
+                        uint16_t ant_port_idx,
+                        uint16_t *ssi,
+                        uint16_t num_ant);
 
 void find_search_space(int ss_type,
                        NR_BWP_Downlink_t *bwp,
@@ -378,6 +380,13 @@ void handle_nr_srs_measurements(const module_id_t module_id,
                                 const slot_t slot,
                                 nfapi_nr_srs_indication_pdu_t *srs_ind);
 
+void handle_nr_srs_toa_vendor_ext_measurements(const module_id_t module_id,
+                                               const frame_t frame,
+                                               const slot_t slot,
+                                               const uint8_t num_ta,
+                                               const int16_t *ta_offset_nsec,
+                                               const rnti_t rnti);
+
 void find_SSB_and_RO_available(gNB_MAC_INST *nrmac);
 
 NR_pdsch_dmrs_t get_dl_dmrs_params(const NR_ServingCellConfigCommon_t *scc,
@@ -535,7 +544,7 @@ void nr_mac_trigger_ul_failure(NR_UE_sched_ctrl_t *sched_ctrl, NR_SubcarrierSpac
 void nr_mac_reset_ul_failure(NR_UE_sched_ctrl_t *sched_ctrl);
 bool nr_mac_check_ul_failure(gNB_MAC_INST *nrmac, int rnti, NR_UE_sched_ctrl_t *sched_ctrl);
 
-void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int new_bwp_id, bool new_beam);
+void nr_mac_trigger_reconfiguration(const gNB_MAC_INST *nrmac, NR_UE_info_t *UE, int new_bwp_id, int new_beam);
 
 bool nr_mac_add_lcid(NR_UE_sched_ctrl_t *sched_ctrl, const nr_lc_config_t *c);
 nr_lc_config_t *nr_mac_get_lc_config(NR_UE_sched_ctrl_t* sched_ctrl, int lcid);
@@ -563,6 +572,7 @@ void post_process_ulsch(gNB_MAC_INST *nr_mac,
                         int sched_srs);
 
 float nr_mac_get_snr(const nr_power_control_t *pc);
+float nr_mac_get_rssi(const nr_power_control_t *pc);
 void nr_mac_pc_snr(nr_power_control_t *pc, int snrx10, int rssi);
 void nr_mac_pc_reset_snr(nr_power_control_t *pc, int snrx10, int rssi);
 void nr_mac_set_target_snrx10(nr_power_control_t *pc, int target_snrx10);

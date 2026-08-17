@@ -80,6 +80,10 @@
 #include "alg/find.h"
 #include "NR_HandoverCommand.h"
 #include "openair2/SDAP/nr_sdap/nr_sdap_configuration.h"
+#include "rrc_gNB_NRPPA.h"
+#include "openair2/F1AP/lib/f1ap_positioning.h"
+#include "openair3/NRPPA/nrppa_gNB_location_information_transfer.h"
+#include "openair3/NRPPA/nrppa_gNB_measurement_information_transfer.h"
 
 #ifdef E2_AGENT
 #include "openair2/E2AP/RAN_FUNCTION/O-RAN/ran_func_rc_extern.h"
@@ -325,6 +329,43 @@ static void nr_rrc_transfer_protected_rrc_message(const gNB_RRC_INST *rrc,
 #else
   UNUSED(message_id);
 #endif
+}
+
+typedef struct deliver_ue_context_modif_confirm_s {
+  const gNB_RRC_INST *rrc;
+  f1ap_ue_context_modif_confirm_t *confirm;
+  sctp_assoc_t assoc_id;
+} deliver_ue_context_modif_confirm_t;
+
+static void rrc_deliver_ue_context_modif_confirm(void *deliver_pdu_data, ue_id_t ue_id, int srb_id, char *buf, int size, int sdu_id)
+{
+  UNUSED(ue_id);
+  UNUSED(sdu_id);
+  DevAssert(deliver_pdu_data != NULL);
+  deliver_ue_context_modif_confirm_t *data = (deliver_ue_context_modif_confirm_t *)deliver_pdu_data;
+  data->confirm->rrc_container = (uint8_t *)buf;
+  data->confirm->rrc_container_length = size;
+  data->rrc->mac_rrc.ue_context_modification_confirm(data->assoc_id, data->confirm);
+}
+
+static void nr_rrc_transfer_protected_ue_reconfig_confirm(const gNB_RRC_INST *rrc,
+                                                          const gNB_RRC_UE_t *ue_p,
+                                                          uint8_t srb_id,
+                                                          const uint8_t *buffer,
+                                                          int size)
+{
+  DevAssert(size > 0);
+  f1_ue_data_t ue_data = cu_get_f1_ue_data(ue_p->rrc_ue_id);
+  RETURN_IF_INVALID_ASSOC_ID(ue_data.du_assoc_id);
+  f1ap_ue_context_modif_confirm_t confirm = { .gNB_CU_ue_id = ue_p->rrc_ue_id, .gNB_DU_ue_id = ue_data.secondary_ue};
+  deliver_ue_context_modif_confirm_t data = {.rrc = rrc, .confirm = &confirm, .assoc_id = ue_data.du_assoc_id};
+  nr_pdcp_data_req_srb(ue_p->rrc_ue_id,
+                       srb_id,
+                       rrc_gNB_mui++,
+                       size,
+                       (unsigned char *const)buffer,
+                       rrc_deliver_ue_context_modif_confirm,
+                       &data);
 }
 
 static void rrc_gNB_CU_DU_init(gNB_RRC_INST *rrc)
@@ -1261,7 +1302,9 @@ static void rrc_gNB_process_RRCReestablishmentComplete(gNB_RRC_INST *rrc, gNB_RR
   }
 }
 
-int nr_rrc_reconfiguration_req(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue_p)
+/* \brief Explicit request for reconfiguration from DU, after UE context
+ * modificatien required. Send in a UE context modification confirm message. */
+static int nr_rrc_reconfiguration_req(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue_p)
 {
   uint8_t xid = rrc_gNB_get_next_transaction_identifier(rrc->module_id);
   ue_p->xids[xid] = RRC_DEDICATED_RECONF;
@@ -1273,8 +1316,7 @@ int nr_rrc_reconfiguration_req(gNB_RRC_INST *rrc, gNB_RRC_UE_t *ue_p)
     LOG_E(NR_RRC, "UE %d: Failed to generate RRCReconfiguration\n", ue_p->rrc_ue_id);
     return -1;
   }
-  const uint32_t msg_id = NR_DL_DCCH_MessageType__c1_PR_rrcReconfiguration;
-  nr_rrc_transfer_protected_rrc_message(rrc, ue_p, DL_SCH_LCID_DCCH, msg_id, msg.buf, msg.len);
+  nr_rrc_transfer_protected_ue_reconfig_confirm(rrc, ue_p, DL_SCH_LCID_DCCH, msg.buf, msg.len);
   free_byte_array(msg);
   free_RRCReconfiguration_params(params);
   return 0;
@@ -1913,16 +1955,20 @@ void rrc_forward_ue_nas_message(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE)
 
   LOG_UE_DL_EVENT(UE, "Send DL Information Transfer [%ld bytes]\n", UE->nas_pdu.len);
 
-  uint8_t buffer[4096];
   unsigned int xid = rrc_gNB_get_next_transaction_identifier(rrc->module_id);
-  uint32_t length = do_NR_DLInformationTransfer(buffer, sizeof(buffer), xid, UE->nas_pdu.len, UE->nas_pdu.buf);
-  LOG_DUMPMSG(NR_RRC, DEBUG_RRC, buffer, length, "[MSG] RRC DL Information Transfer\n");
-  rb_id_t srb_id = UE->Srb[2].Active ? DL_SCH_LCID_DCCH1 : DL_SCH_LCID_DCCH;
-  const uint32_t msg_id = NR_DL_DCCH_MessageType__c1_PR_dlInformationTransfer;
-  nr_rrc_transfer_protected_rrc_message(rrc, UE, srb_id, msg_id, buffer, length);
-  // no need to free UE->nas_pdu.buf, do_NR_DLInformationTransfer() did that
+  byte_array_t msg = do_NR_DLInformationTransfer(xid, UE->nas_pdu.len, UE->nas_pdu.buf);
+  /* do_NR_DLInformationTransfer() takes ownership of the NAS buffer */
   UE->nas_pdu.buf = NULL;
   UE->nas_pdu.len = 0;
+  if (msg.buf == NULL || msg.len <= 0) {
+    LOG_E(NR_RRC, "UE %d: failed to encode DLInformationTransfer\n", UE->rrc_ue_id);
+    return;
+  }
+  LOG_DUMPMSG(NR_RRC, DEBUG_RRC, msg.buf, msg.len, "[MSG] RRC DL Information Transfer\n");
+  rb_id_t srb_id = UE->Srb[2].Active ? DL_SCH_LCID_DCCH1 : DL_SCH_LCID_DCCH;
+  const uint32_t msg_id = NR_DL_DCCH_MessageType__c1_PR_dlInformationTransfer;
+  nr_rrc_transfer_protected_rrc_message(rrc, UE, srb_id, msg_id, msg.buf, msg.len);
+  free_byte_array(msg);
 }
 
 static void handle_ueCapabilityInformation(gNB_RRC_INST *rrc, gNB_RRC_UE_t *UE, const NR_UECapabilityInformation_t *ue_cap_info)
@@ -2915,8 +2961,13 @@ static void rrc_CU_process_ue_modification_required(MessageDef *msg_p, instance_
     store_cgc(UE, &temp_cgc);
 
     /* trigger reconfiguration */
-    if (!UE->ongoing_reconfiguration)
+    if (!UE->ongoing_reconfiguration) {
       nr_rrc_reconfiguration_req(rrc, UE);
+    } else {
+      LOG_W(NR_RRC, "UE %d UE Context Modification Request: has ongoing reconfiguration\n", UE->rrc_ue_id);
+      /* TODO send reject? */
+    }
+
     return;
   }
   LOG_W(RRC,
@@ -3768,6 +3819,45 @@ void *rrc_gnb_task(void *args_p)
       case NGAP_HANDOVER_COMMAND:
         rrc_gNB_process_HandoverCommand(RC.nrrrc[instance], &NGAP_HANDOVER_COMMAND(msg_p));
         rrc_gNB_free_Handover_Command(&NGAP_HANDOVER_COMMAND(msg_p)); // Free transfered NG message
+        break;
+
+      case NRPPA_TRP_INFORMATION_REQ:
+        rrc_gNB_process_trp_information_request(RC.nrrrc[instance], &NRPPA_TRP_INFORMATION_REQ(msg_p));
+        free_nrppa_trp_information_request(&NRPPA_TRP_INFORMATION_REQ(msg_p));
+        break;
+
+      case F1AP_TRP_INFORMATION_RESP:
+        rrc_CU_process_trp_information_response(&F1AP_TRP_INFORMATION_RESP(msg_p));
+        free_trp_information_resp(&F1AP_TRP_INFORMATION_RESP(msg_p));
+        break;
+
+      case NRPPA_POSITIONING_INFORMATION_REQ:
+        rrc_gNB_process_positioning_information_request(RC.nrrrc[instance], &NRPPA_POSITIONING_INFORMATION_REQ(msg_p));
+        break;
+
+      case F1AP_POSITIONING_INFORMATION_RESP:
+        rrc_CU_process_positioning_information_response(&F1AP_POSITIONING_INFORMATION_RESP(msg_p));
+        free_positioning_information_resp(&F1AP_POSITIONING_INFORMATION_RESP(msg_p));
+        break;
+
+      case NRPPA_POSITIONING_ACTIVATION_REQ:
+        rrc_gNB_process_positioning_activation_request(RC.nrrrc[instance], &NRPPA_POSITIONING_ACTIVATION_REQ(msg_p));
+        free_nrppa_positioning_activation_request(&NRPPA_POSITIONING_ACTIVATION_REQ(msg_p));
+        break;
+
+      case F1AP_POSITIONING_ACTIVATION_RESP:
+        rrc_CU_process_positioning_activation_response(&F1AP_POSITIONING_ACTIVATION_RESP(msg_p));
+        free_positioning_activation_resp(&F1AP_POSITIONING_ACTIVATION_RESP(msg_p));
+        break;
+
+      case NRPPA_MEASUREMENT_REQ:
+        rrc_gNB_process_positioning_measurement_request(RC.nrrrc[instance], &NRPPA_MEASUREMENT_REQ(msg_p));
+        free_nrppa_measurement_request(&NRPPA_MEASUREMENT_REQ(msg_p));
+        break;
+
+      case F1AP_POSITIONING_MEASUREMENT_RESP:
+        rrc_CU_process_positioning_measurement_response(&F1AP_POSITIONING_MEASUREMENT_RESP(msg_p));
+        free_positioning_measurement_resp(&F1AP_POSITIONING_MEASUREMENT_RESP(msg_p));
         break;
 
       default:
