@@ -412,7 +412,7 @@ int nrue_ru_adjust_rx_gain(PHY_VARS_NR_UE *UE, int gain_change)
   openair0_device_t *dev = &openair0_dev[UE->rf_map.card];
   /*
   //Increase the RX gain by the value determined by adjust_rxgain
-  cfg0->rx_gain[0] += gain_change;
+  cfg->rx_gain[0] += gain_change;
   */ 
   if ((cfg->rx_gain[0] == MAX_RF_GAIN) && (!UE->is_synchronized)){
     LOG_E(HW, "Max usrp rx gain reached! Reseting rx_gain to MIN_RF_GAIN (%d)...\n", MIN_RF_GAIN);

@@ -215,11 +215,11 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
     int SNRtimes10 = dB_fixed_x10(signal_pwr) - dB_fixed_x10(ue->measurements.n0_power_avg);
     ue->measurements.ssb_sinr_dB[ssb_index] = SNRtimes10 / 10.0;
 
-    if(((TARGET_RX_POWER - (int)rsrp_db_per_re) > 10) && (cfg0->rx_gain[0] < MAX_RF_GAIN)){
+    if(((TARGET_RX_POWER - (int)rsrp_db_per_re) > 10) && (cfg->rx_gain[0] < MAX_RF_GAIN)){
       ue->adjust_rxgain = +1; //ALEX added for AGC test
       LOG_ME(PHY, "NEW adjust_rxgain assigned! ( %d dB) (rsrp_per_re: %.2f)\n", ue->adjust_rxgain, rsrp_db_per_re); //ALEX added for debug
     }
-    else if(((TARGET_RX_POWER - (int)rsrp_db_per_re) < -10) && (cfg0->rx_gain[0] > 0)){
+    else if(((TARGET_RX_POWER - (int)rsrp_db_per_re) < -10) && (cfg->rx_gain[0] > 0)){
       ue->adjust_rxgain = -1; //ALEX added for AGC test
       LOG_ME(PHY, "NEW adjust_rxgain assigned! ( %d dB) (rsrp_per_re: %.2f)\n", ue->adjust_rxgain, rsrp_db_per_re); //ALEX added for debug
     }
@@ -238,7 +238,7 @@ void nr_ue_ssb_rsrp_measurements(PHY_VARS_NR_UE *ue,
           ue->measurements.ssb_rsrp_dBm[ssb_index],
           rsrp_db_per_re,
           ue->measurements.ssb_sinr_dB[ssb_index],
-          (int)cfg0->rx_gain[0],
+          (int)cfg->rx_gain[0],
           ue->is_synchronized); //ALEX D to ME and added current RX gain configured for USRP
   }
   log_cntr++; //ALEX added

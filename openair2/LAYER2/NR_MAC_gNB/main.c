@@ -137,6 +137,23 @@ void *nrmac_stats_thread(void *arg) {
   return NULL;
 }
 
+void clear_mac_stats(gNB_MAC_INST *gNB) {
+  // limpa as stats MAC
+  UE_iterator(gNB->UE_info.connected_ue_list, UE) {
+    memset(&UE->mac_stats,0,sizeof(UE->mac_stats));
+  }
+}
+
+static bool has_established_pdu_session(const gNB_RRC_UE_t *ue_context)
+{
+  // usa o rrc para verificar se existe pdu establecida para este UE
+  FOR_EACH_SEQ_ARR(rrc_pdu_session_param_t *, pdu, &ue_context->pduSessions) {
+    if (pdu->status == PDU_SESSION_STATUS_ESTABLISHED)
+      return true;
+  }
+  return false;
+}
+
 static char *st_append(char *start, const char *end, const char *format, ...)
 {
   size_t space = end - start;
@@ -166,13 +183,13 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
 {
   const char *begin = output;
   const char *end = output + strlen;
-  const bool have_du_id = gNB->f1_config.setup_req != NULL;
-  const char *gnb_name = get_gnb_name(gNB);
+  const bool have_du_id = gNB->f1_config.setup_req != NULL; //[ADRIANO]
+  const char *gnb_name = get_gnb_name(gNB); //[ADRIANO]
   /* this function is called from gNB_dlsch_ulsch_scheduler(), so assumes the
    * scheduler to be locked*/
   NR_SCHED_ENSURE_LOCKED(&gNB->sched_lock);
 
-  // extra header para dar mais contexto sobre a identidade dos UEs
+  // extra header para dar mais contexto sobre a identidade dos UEs [ADRIANO]
   output = st_append(output, end, "gNB ID %u (0x%06X)", gNB->f1_config.gnb_id, gNB->f1_config.gnb_id);
   if (gnb_name)
     output = st_append(output, end, " gNB name %s", gnb_name);
@@ -185,10 +202,12 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
   UE_iterator(gNB->UE_info.connected_ue_list, UE) {
     NR_UE_sched_ctrl_t *sched_ctrl = &UE->UE_sched_ctrl;
     NR_mac_stats_t *stats = &UE->mac_stats;
+    const gNB_RRC_INST *rrc = RC.nrrrc ? RC.nrrrc[gNB->Mod_id] : NULL;
+    const rrc_gNB_ue_context_t *rrc_ue_context = rrc ? rrc_gNB_get_ue_context_by_rnti_any_du((gNB_RRC_INST *)rrc, UE->rnti) : NULL;
     const int avg_rsrp = stats->num_rsrp_meas > 0 ? stats->cumul_rsrp / (int)stats->num_rsrp_meas : 0;
     const int avg_sinrx10 = stats->num_sinr_meas > 0 ? stats->cumul_sinrx10 / (int)stats->num_sinr_meas : 0;
 
-    // junta toda a info RRC e F1 disponivel 
+    // junta toda a info RRC e F1 disponivel [ADRIANO]
     output = st_append(output, end, "UE RNTI %04x CU-UE-ID ", UE->rnti);
     if (du_exists_f1_ue_data(UE->rnti)) {
       f1_ue_data_t ued = du_get_f1_ue_data(UE->rnti);
@@ -196,25 +215,23 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
     } else {
       output = st_append(output, end, "(none)");
     }
-
     output = st_append(output, end, " RAN-UE-NGAP-ID ");
     if (rrc_ue_context) {
       output = st_append(output, end, "%u", rrc_ue_context->ue_context.rrc_ue_id);
     } else {
       output = st_append(output, end, "(none)");
     }
-
     output = st_append(output, end, " AMF-UE-NGAP-ID ");
     if (rrc_ue_context && rrc_ue_context->ue_context.amf_ue_ngap_id != INT64_MAX) {
       output = st_append(output, end, "%" PRIu64, rrc_ue_context->ue_context.amf_ue_ngap_id);
     } else {
       output = st_append(output, end, "(none)");
     }
-
     output = st_append(output,
                        end,
                        " PDU-Session established %s",
                        rrc_ue_context && has_established_pdu_session(&rrc_ue_context->ue_context) ? "yes" : "no");
+
 
     bool in_sync = !sched_ctrl->ul_failure;
     output = st_append(output,
