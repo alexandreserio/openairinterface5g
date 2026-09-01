@@ -56,7 +56,8 @@ static nr_rapid_check_t check_rapid_for_prach_occasion(gNB_MAC_INST *nr_mac,
   UNUSED(freq_index);
   UNUSED(symbol);
 
-  NR_COMMON_channels_t *cc = &nr_mac->common_channels[CC_id];
+  nr_cell_sched_t *cell_sched = &nr_mac->cells[CC_id];
+  NR_COMMON_channels_t *cc = &cell_sched->common_channels;
   NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
   NR_BWP_UplinkCommon_t *initialUplinkBWP = scc->uplinkConfigCommon->initialUplinkBWP;
 
@@ -732,7 +733,7 @@ void nr_initiate_ra_proc(module_id_t module_idP,
    * contention-based preamble set before allocating a TC-RNTI.
    */
   if (!UE) {
-    nr_rapid_check_t rapid_check = check_rapid_for_prach_occasion(nr_mac, CC_id, frame, slot, preamble_index, freq_index, symbol);
+    nr_rapid_check_t rapid_check = check_rapid_for_prach_occasion(nr_mac, phy_id, frame, slot, preamble_index, freq_index, symbol);
     LOG_A(NR_MAC,
           "[TA_DEBUG][RAPID_CHECK] %d.%d preamble_index %u symbol %u freq_index %u checked %d valid %d "
           "first_valid_rapid %u num_valid_rapids %u ssb_ordinal %d prach_occasion_id %d reason %s\n",

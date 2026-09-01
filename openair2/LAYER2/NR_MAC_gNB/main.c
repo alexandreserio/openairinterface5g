@@ -173,6 +173,18 @@ static char *st_append(char *start, const char *end, const char *format, ...)
     return (char *)end;
 }
 
+static const char *get_gnb_name(const gNB_MAC_INST *gNB)
+{
+  if(gNB->f1_config.setup_req && gNB->f1_config.setup_req->gNB_DU_name){
+    return gNB->f1_config.setup_req->gNB_DU_name;
+  }
+  // retorna o nome do gNB se estiver definido no RRC
+  const gNB_RRC_INST *rrc = RC.nrrrc ? RC.nrrrc[gNB->Mod_id] : NULL;
+  if (rrc && rrc->node_name)
+    return rrc->node_name;
+  return NULL;
+} // [ADRIANO]
+
 size_t dump_mac_stats(gNB_MAC_INST *gNB, const nr_cell_sched_t *cell, char *output, size_t strlen, bool reset_rsrp)
 {
   const char *begin = output;

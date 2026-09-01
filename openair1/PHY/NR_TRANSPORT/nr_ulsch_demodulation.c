@@ -672,8 +672,7 @@ int nr_rx_pusch_group_tp(PHY_VARS_gNB *gNB,
                          uint32_t **ret_unav_res_group,
                          uint8_t group_size,
                          uint32_t frame,
-                         uint8_t slot)
-{
+                         uint8_t slot){
   // This is a reference pdu since all the UEs in the group have same resource related parameters.
   const nfapi_nr_pusch_pdu_t *rel15_ul_ref = rel15_ul_group[0];
   NR_DL_FRAME_PARMS *frame_parms = &gNB->frame_parms;
@@ -724,23 +723,23 @@ int nr_rx_pusch_group_tp(PHY_VARS_gNB *gNB,
   // memory to store extracted data including PUSCH + DMRS
   c16_t rxFext_slot_mem[1 * buffer_length_slot] __attribute__((aligned(64)));
 
-#if T_TRACER
-  // Initialize memory for DMRS signals
-  if (T_ACTIVE(T_GNB_PHY_UL_FD_DMRS))
-    memset(pusch_dmrs_slot_mem, 0, sizeof(c16_t) * 1 * buffer_length_slot);
+  #if T_TRACER
+    // Initialize memory for DMRS signals
+    if (T_ACTIVE(T_GNB_PHY_UL_FD_DMRS))
+      memset(pusch_dmrs_slot_mem, 0, sizeof(c16_t) * 1 * buffer_length_slot);
 
-  // Initialize memory for channel estimates based on DMRS positions
-  if (T_ACTIVE(T_GNB_PHY_UL_FD_CHAN_EST_DMRS_POS))
-    memset(pusch_ch_est_dmrs_pos_slot_mem, 0, sizeof(c16_t) * buffer_length_slot * 1 * 1);
+    // Initialize memory for channel estimates based on DMRS positions
+    if (T_ACTIVE(T_GNB_PHY_UL_FD_CHAN_EST_DMRS_POS))
+      memset(pusch_ch_est_dmrs_pos_slot_mem, 0, sizeof(c16_t) * buffer_length_slot * 1 * 1);
 
-  // memory to store slot grid with channel coefficients based on DMRS positions after interpolation
-  if (T_ACTIVE(T_GNB_PHY_UL_FD_CHAN_EST_DMRS_INTERPL))
-    memset(pusch_ch_est_dmrs_interpl_slot_mem, 0, sizeof(c16_t) * buffer_length_slot * 1 * 1);
+    // memory to store slot grid with channel coefficients based on DMRS positions after interpolation
+    if (T_ACTIVE(T_GNB_PHY_UL_FD_CHAN_EST_DMRS_INTERPL))
+      memset(pusch_ch_est_dmrs_interpl_slot_mem, 0, sizeof(c16_t) * buffer_length_slot * 1 * 1);
 
-  // memory to store extracted data including PUSCH + DMRS
-  if (T_ACTIVE(T_GNB_PHY_UL_FD_PUSCH_IQ))
-    memset(rxFext_slot_mem, 0, sizeof(c16_t) * buffer_length_slot * 1 * 1);
-#endif
+    // memory to store extracted data including PUSCH + DMRS
+    if (T_ACTIVE(T_GNB_PHY_UL_FD_PUSCH_IQ))
+      memset(rxFext_slot_mem, 0, sizeof(c16_t) * buffer_length_slot * 1 * 1);
+  #endif
 
   // Create a virtual multi layer pdu by accumulating the layers over UEs in the group and storing dmrs ports for joint processing
   uint32_t combined_dmrs_ports = 0;
@@ -1056,60 +1055,48 @@ int nr_rx_pusch_group_tp(PHY_VARS_gNB *gNB,
     }
   } // symbol loop
 
-#if T_TRACER
-  int dmrs_port = get_dmrs_port(0, rel15_ul_ref->dmrs_ports);
+  #if T_TRACER
+    int dmrs_port = get_dmrs_port(0, rel15_ul_ref->dmrs_ports);
 
-  log_ul_fd_dmrs(frame,
-                 slot,
-                 frame_parms,
-                 rel15_ul_ref,
-                 number_dmrs_symbols,
-                 dmrs_port,
-                 (const c16_t *)(&(pusch_dmrs_slot_mem[0])),
-                 rel15_ul_ref->rb_size * NR_NB_SC_PER_RB * rel15_ul_ref->nr_of_symbols * 4);
+    log_ul_fd_dmrs(frame,
+                  slot,
+                  frame_parms,
+                  rel15_ul_ref,
+                  number_dmrs_symbols,
+                  dmrs_port,
+                  (const c16_t *)(&(pusch_dmrs_slot_mem[0])),
+                  rel15_ul_ref->rb_size * NR_NB_SC_PER_RB * rel15_ul_ref->nr_of_symbols * 4);
 
-  log_ul_fd_chan_est_dmrs_pos(frame,
-                              slot,
-                              frame_parms,
-                              rel15_ul_ref,
-                              number_dmrs_symbols,
-                              dmrs_port,
-                              (const c16_t *)(&(pusch_ch_est_dmrs_pos_slot_mem[0])),
-                              rel15_ul_ref->rb_size * NR_NB_SC_PER_RB * rel15_ul_ref->nr_of_symbols * 4);
+    log_ul_fd_chan_est_dmrs_pos(frame,
+                                slot,
+                                frame_parms,
+                                rel15_ul_ref,
+                                number_dmrs_symbols,
+                                dmrs_port,
+                                (const c16_t *)(&(pusch_ch_est_dmrs_pos_slot_mem[0])),
+                                rel15_ul_ref->rb_size * NR_NB_SC_PER_RB * rel15_ul_ref->nr_of_symbols * 4);
 
-  log_ul_fd_pusch_iq(frame,
-                     slot,
-                     frame_parms,
-                     rel15_ul_ref,
-                     number_dmrs_symbols,
-                     dmrs_port,
-                     (const c16_t *)(&(rxFext_slot_mem[0])),
-                     rel15_ul_ref->rb_size * NR_NB_SC_PER_RB * rel15_ul_ref->nr_of_symbols * num_sp_streams * 4);
+    log_ul_fd_pusch_iq(frame,
+                      slot,
+                      frame_parms,
+                      rel15_ul_ref,
+                      number_dmrs_symbols,
+                      dmrs_port,
+                      (const c16_t *)(&(rxFext_slot_mem[0])),
+                      rel15_ul_ref->rb_size * NR_NB_SC_PER_RB * rel15_ul_ref->nr_of_symbols * num_sp_streams * 4);
 
-  log_ul_fd_chan_est_dmrs_interpl(
-      frame,
-      slot,
-      frame_parms,
-      rel15_ul_ref,
-      number_dmrs_symbols,
-      dmrs_port,
-      (const c16_t *)pusch_ch_est_dmrs_interpl_slot_mem,
-      rel15_ul_ref->rb_size * NR_NB_SC_PER_RB * rel15_ul_ref->nr_of_symbols * num_sp_streams * total_layers * 4);
-#endif
+    log_ul_fd_chan_est_dmrs_interpl(
+        frame,
+        slot,
+        frame_parms,
+        rel15_ul_ref,
+        number_dmrs_symbols,
+        dmrs_port,
+        (const c16_t *)pusch_ch_est_dmrs_interpl_slot_mem,
+        rel15_ul_ref->rb_size * NR_NB_SC_PER_RB * rel15_ul_ref->nr_of_symbols * num_sp_streams * total_layers * 4);
+  #endif
 
-  join_task_ans(&ans);
-
-  iq_fifo_write_pusch_frame(joint_pv, rel15_ul_ref, end_symbol);
-
-  for (int i = 0; i < sz_arr; ++i) {
-    // retrieve measurements
-    puschSymbolProc_t *rdata = &arr[i];
-    merge_meas(&gNB->pusch_extraction_stats, &rdata->pusch_extr);
-    merge_meas(&gNB->pusch_channel_compensation_stats, &rdata->pusch_ch_comp);
-    merge_meas(&gNB->ulsch_llr_stats, &rdata->ulsch_llr);
-    merge_meas(&gNB->ulsch_layer_demapping_stats, &rdata->ul_demap);
-    merge_meas(&gNB->ulsch_unscrambling_stats, &rdata->ul_unscram);
-  }
+  join_task_ans(&ans);  
   for (int u = 0; u < group_size; u++) {
     NR_gNB_PUSCH *pv = pusch_vars_group[u];
     // Copy unavailable resources per UE
@@ -1124,6 +1111,9 @@ int nr_rx_pusch_group_tp(PHY_VARS_gNB *gNB,
       pv->ulsch_noise_power_tot += pv->ulsch_noise_power[aarx];
     }
   }
+
+  iq_fifo_write_pusch_frame(joint_pv, rel15_ul_ref, end_symbol); //[ADRIANO]
+  
   stop_meas(&gNB->rx_pusch_symbol_processing_stats);
 
   // Copy the data to the scope. This cannot be performed in one call to gNBscopeCopy because the data is not contiguous in the
