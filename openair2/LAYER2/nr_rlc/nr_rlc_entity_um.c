@@ -565,10 +565,10 @@ void nr_rlc_entity_um_recv_sdu(nr_rlc_entity_t *_entity,
     exit(1);
   }
 
-  /* log SDUs rejected, at most once per second */
+  /* log SDUs rejected at most once per 1280 ms (128 frames @ 10 ms, to match MAC cadence) */
   if (entity->sdu_rejected != 0
-      && entity->t_current > entity->t_log_buffer_full + 1000) {
-    LOG_E(RLC, "(UM RECV SDU) %d SDU rejected, SDU buffer full\n", entity->sdu_rejected); //[ALEX] Added id
+      && entity->t_current > entity->t_log_buffer_full + 1280) {
+    LOG_E(RLC, "(UM RECV SDU) %d SDU rejected, SDU buffer full\n", entity->sdu_rejected);
     LOG_E(RLC, "Num of pkts received in buffer: %u (sdu size = %d)\n", entity->common.stats.rxsdu_pkts, sdu->size); //[ALEX] Added
     entity->sdu_rejected = 0;
     entity->t_log_buffer_full = entity->t_current;

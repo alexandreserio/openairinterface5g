@@ -330,7 +330,7 @@ static void nr_rx_pdcch_symbol(PHY_VARS_NR_UE *ue,
   // Note: pilot returned by the following function is already the complex conjugate of the transmitted DMRS
   const uint32_t *gold = nr_gold_pdcch(fp->N_RB_DL, fp->symbols_per_slot, scrambling_id, proc->nr_slot_rx, symbol);
   nr_pdcch_dmrs_ref(gold, pilot, n_rb + rb_offset + dmrs_ref);
-  nr_pdcch_channel_estimation(ue,
+  nr_pdcch_channel_estimation(fp,
                               n_rb,
                               rb_offset,
                               dmrs_ref,
@@ -360,7 +360,7 @@ static void nr_rx_pdcch_symbol(PHY_VARS_NR_UE *ue,
 
   LOG_D(NR_PHY_DCI, "in channel level function (dl_ch_estimates_ext -> dl_ch_estimates_ext)\n");
   int avg[fp->nb_antennas_rx];
-  nr_channel_level(0, rx_size, pdcch_dl_ch_estimates_ext, fp->nb_antennas_rx, 1, avg, n_rb * RE_PER_RB_OUT_DMRS);
+  nr_channel_level(0, rx_size, pdcch_dl_ch_estimates_ext, fp->nb_antennas_rx, avg, n_rb * RE_PER_RB_OUT_DMRS);
   int avgs = avg[0];
   for (int i = 1; i < fp->nb_antennas_rx; i++)
       avgs = cmax(avgs, avg[i]);

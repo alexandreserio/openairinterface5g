@@ -54,6 +54,7 @@ There is some general information in the [OpenAirInterface Gitlab Wiki](https://
 - [How to run the physical simulators](./physical-simulators.md)
 - [How to setup OAI with Nvidia Aerial and Foxconn](./Aerial_FAPI_Split_Tutorial.md)
 - [How to setup OAI with LDPC accelerators (Xilinx T2/Intel ACCs)](./LDPC_OFFLOAD_SETUP.md)
+- [How to run the UE with LDPC CUDA accelerator](./NR_SA_Tutorial_OAI_nrUE_GPU_offload.md)
 - [How to setup OAI with the XDMA FPGA LDPC accelerator](./LDPC_XDMA_offload_setup.md)
 - [How to do a handover](./handover-tutorial.md)
 - [How to setup gNB frequency](./gNB_frequency_setup.md)
@@ -145,5 +146,5 @@ The other SDRs (AW2S, LimeSDR, ...) have no READMEs.
 - [sanitizers.md](./dev_tools/sanitizers.md): how to run with ASan/UBSan/MemSAN/TSan
 - [iwyu](../tools/iwyu/README.md) is a tool to detect `#include` errors
 - [docker-dev-env](../tools/docker-dev-env/README.md) is a ubuntu24 docker development environment
-- [performance analysis with tracy](./dev_tools/tracy.md)
+- [performance monitoring](./dev_tools/performance_monitoring.md): a collection of tools to monitor the computing performance of OAI
 - [doc_best_practices.md](./doc_best_practices.md): overall best practices for writing documentations

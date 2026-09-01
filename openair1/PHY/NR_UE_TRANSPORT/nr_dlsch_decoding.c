@@ -172,9 +172,6 @@ void nr_dlsch_decoding(PHY_VARS_NR_UE *phy_vars_ue,
   TB_parameters.d_to_be_cleared = harq_process->first_rx == 1;
   for (int r = 0; r < TB_parameters.C; r++)
     TB_parameters.decodeSuccess[r] = false;
-  reset_meas(&TB_parameters.ts_deinterleave);
-  reset_meas(&TB_parameters.ts_rate_unmatch);
-  reset_meas(&TB_parameters.ts_seg_prep);
   reset_meas(&TB_parameters.ts_ldpc_decode);
 
   for (int r = 0; r < TB_parameters.C; r++) {
@@ -220,10 +217,7 @@ void nr_dlsch_decoding(PHY_VARS_NR_UE *phy_vars_ue,
     LOG_D(PHY, "frame=%d, slot=%d, first_rx=%d, rv_index=%d\n", proc->frame_rx, proc->nr_slot_rx, harq_process->first_rx, cw_info->rv);
   }
 
-  merge_meas(&phy_vars_ue->phy_cpu_stats.cpu_time_stats[DLSCH_DEINTERLEAVING_STATS], &TB_parameters.ts_deinterleave);
-  merge_meas(&phy_vars_ue->phy_cpu_stats.cpu_time_stats[DLSCH_RATE_UNMATCHING_STATS], &TB_parameters.ts_rate_unmatch);
   merge_meas(&phy_vars_ue->phy_cpu_stats.cpu_time_stats[DLSCH_LDPC_DECODING_STATS], &TB_parameters.ts_ldpc_decode);
-  merge_meas(&phy_vars_ue->phy_cpu_stats.cpu_time_stats[DLSCH_SEG_PREP_STATS], &TB_parameters.ts_seg_prep);
 
   kpiStructure.nb_total++;
   kpiStructure.blockSize = cw_info->TBS;
@@ -237,10 +231,30 @@ void nr_dlsch_decoding(PHY_VARS_NR_UE *phy_vars_ue,
     // we have regrouped the transport block
     if (!check_crc(b, lenWithCrc(1, cw_info->TBS), crcType(1, cw_info->TBS))) {
       LOG_E(PHY,
-            " Frame %d.%d LDPC global CRC fails, but individual LDPC CRC succeeded. %d segs\n",
+            " Frame %d.%d LDPC global CRC fails, but individual LDPC CRC succeeded. %d segs "
+            "(harq_pid %d cw %d first_rx %d round %d rv %d clear %d | TBS %d A %d K %d Z %d F %d "
+            "| E %d E2 %d first_rE2 %d R %d R2 %d Qm %d Nl %d)\n",
             proc->frame_rx,
             proc->nr_slot_rx,
-            harq_process->C);
+            harq_process->C,
+            harq_pid,
+            cw_idx,
+            harq_process->first_rx,
+            harq_process->DLround,
+            cw_info->rv,
+            TB_parameters.d_to_be_cleared,
+            cw_info->TBS,
+            TB_parameters.A,
+            harq_process->K,
+            harq_process->Z,
+            harq_process->F,
+            TB_parameters.E,
+            TB_parameters.E2,
+            TB_parameters.first_rE2,
+            TB_parameters.R,
+            TB_parameters.R2,
+            TB_parameters.Qm,
+            TB_parameters.nb_layers);
       harq_process->decodeResult = false;
     }
   }
