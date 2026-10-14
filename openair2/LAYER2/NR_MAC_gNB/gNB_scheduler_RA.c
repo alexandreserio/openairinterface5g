@@ -347,9 +347,7 @@ static void fill_vrb(const frame_t frame,
   const int index = ul_buffer_index(frame, slot, slots_frame, vrb_size);
   uint16_t *vrb_map_UL = &cc->vrb_map_UL[beam_idx][index * MAX_BWP_SIZE];
   for (int i = 0; i < nb_rb; ++i) {
-    AssertFatal(
-        !(vrb_map_UL[rb_start + i] & SL_to_bitmap(start_symb, num_symb)),
-        "PRACH resources are already occupied!\n");
+    AssertFatal(!(vrb_map_UL[rb_start + i] & SL_to_bitmap(start_symb, num_symb)), "PRACH resources are already occupied!\n\nframe %d, slot %d, beam %d, rb_start %d, start_symb %d, num_symb %d\n", frame, slot, beam_idx, rb_start + i, start_symb, num_symb);
     vrb_map_UL[rb_start + i] |= SL_to_bitmap(start_symb, num_symb);
   }
 }
